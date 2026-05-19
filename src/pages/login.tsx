@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Phone, ArrowRight, Droplet, ChevronLeft, Mail } from "lucide-react";
+import { Phone, ArrowRight, Droplet, ChevronLeft, Mail, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useProfile } from "@/context/profile-context";
 import { supabase } from "@/lib/supabase";
 
-type Step = "input" | "otp";
+type Step = "input" | "email-sent" | "otp";
 type AuthMethod = "email" | "phone";
 
 function toE164(raw: string): string {
@@ -37,7 +37,7 @@ export default function Login() {
     setInputError("");
   };
 
-  const handleSendOtp = async () => {
+  const handleSend = async () => {
     setInputError("");
 
     if (method === "email") {
@@ -49,7 +49,7 @@ export default function Login() {
       const { error } = await supabase.auth.signInWithOtp({ email });
       setSending(false);
       if (error) { setInputError(error.message); return; }
-      setStep("otp");
+      setStep("email-sent");
     } else {
       const digits = phone.replace(/\D/g, "");
       if (digits.length < 10) {
@@ -64,17 +64,16 @@ export default function Login() {
     }
   };
 
-  const handleVerify = async () => {
+  const handleVerifyOtp = async () => {
     if (otp.length < 6 || verifying) return;
     setVerifying(true);
     setOtpError(false);
 
-    let error;
-    if (method === "email") {
-      ({ error } = await supabase.auth.verifyOtp({ email, token: otp, type: "email" }));
-    } else {
-      ({ error } = await supabase.auth.verifyOtp({ phone: toE164(phone), token: otp, type: "sms" }));
-    }
+    const { error } = await supabase.auth.verifyOtp({
+      phone: toE164(phone),
+      token: otp,
+      type: "sms",
+    });
 
     if (error) {
       setVerifying(false);
@@ -83,33 +82,36 @@ export default function Login() {
       return;
     }
 
-    if (method === "phone") {
-      try {
-        const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(toE164(phone))}`);
-        if (res.ok) {
-          const data = await res.json() as {
-            user: { id: number; blood_group: string; location: string };
-            donor: { lifeline_donations: number; pre_lifeline_donations: number; last_donation_date: string | null } | null;
-          };
-          updateProfile({
-            phone: toE164(phone),
-            ...(data.user.blood_group ? { bloodGroup: data.user.blood_group as any } : {}),
-            ...(data.user.location ? { city: data.user.location } : {}),
-            ...(data.donor ? {
-              donationCount: data.donor.lifeline_donations,
-              preLifelineDonations: data.donor.pre_lifeline_donations,
-              lastDonationDate: data.donor.last_donation_date ?? undefined,
-            } : {}),
-          });
-        }
-      } catch { /* silent */ }
-    }
+    try {
+      const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(toE164(phone))}`);
+      if (res.ok) {
+        const data = await res.json() as {
+          user: { id: number; blood_group: string; location: string };
+          donor: { lifeline_donations: number; pre_lifeline_donations: number; last_donation_date: string | null } | null;
+        };
+        updateProfile({
+          phone: toE164(phone),
+          ...(data.user.blood_group ? { bloodGroup: data.user.blood_group as any } : {}),
+          ...(data.user.location ? { city: data.user.location } : {}),
+          ...(data.donor ? {
+            donationCount: data.donor.lifeline_donations,
+            preLifelineDonations: data.donor.pre_lifeline_donations,
+            lastDonationDate: data.donor.last_donation_date ?? undefined,
+          } : {}),
+        });
+      }
+    } catch { /* silent */ }
 
     setVerifying(false);
     setLocation(profile?.name ? "/home" : "/onboarding");
   };
 
-  const displayIdentifier = method === "email" ? email : phone;
+  const goBack = () => {
+    setStep("input");
+    setOtp("");
+    setOtpError(false);
+    setInputError("");
+  };
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background relative overflow-hidden">
@@ -117,9 +119,9 @@ export default function Login() {
 
       <div className="relative z-10 flex flex-col flex-1">
         <div className="p-4 pt-12">
-          {step === "otp" && (
+          {(step === "otp" || step === "email-sent") && (
             <button
-              onClick={() => { setStep("input"); setOtp(""); setOtpError(false); }}
+              onClick={goBack}
               className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -138,6 +140,7 @@ export default function Login() {
         <div className="flex-1 bg-background rounded-t-[2.5rem] px-6 pt-8 pb-10">
           <AnimatePresence mode="wait">
 
+            {/* ── Input step ── */}
             {step === "input" && (
               <motion.div
                 key="input"
@@ -177,7 +180,7 @@ export default function Login() {
                     >
                       <div>
                         <h2 className="text-2xl font-bold text-foreground">Enter your email</h2>
-                        <p className="text-muted-foreground mt-1 text-sm">We'll send a 6-digit code to your inbox</p>
+                        <p className="text-muted-foreground mt-1 text-sm">We'll send a magic link to sign you in</p>
                       </div>
                       <div className="space-y-2">
                         <div className="relative">
@@ -188,19 +191,19 @@ export default function Login() {
                             className="pl-12 h-12 text-base rounded-xl"
                             value={email}
                             onChange={(e) => { setEmail(e.target.value); setInputError(""); }}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleSendOtp(); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSend(); }}
                             autoFocus
                           />
                         </div>
                         {inputError && <p className="text-sm text-destructive font-medium">{inputError}</p>}
                       </div>
                       <Button
-                        onClick={handleSendOtp}
+                        onClick={handleSend}
                         disabled={sending}
                         className="w-full h-12 text-base font-semibold rounded-xl group"
                       >
                         {sending ? "Sending…" : (
-                          <><span>Send OTP</span><ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                          <><span>Send Magic Link</span><ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" /></>
                         )}
                       </Button>
                     </motion.div>
@@ -217,7 +220,6 @@ export default function Login() {
                         <h2 className="text-2xl font-bold text-foreground">Enter your number</h2>
                         <p className="text-muted-foreground mt-1 text-sm">New or returning? Enter your number to continue</p>
                       </div>
-                      {/* Coming soon notice */}
                       <div className="rounded-xl border border-border bg-muted/40 px-4 py-5 text-center space-y-1">
                         <p className="text-sm font-semibold text-foreground">Phone login coming soon</p>
                         <p className="text-xs text-muted-foreground">SMS verification is not yet available. Please use Email to sign in.</p>
@@ -245,6 +247,52 @@ export default function Login() {
               </motion.div>
             )}
 
+            {/* ── Email sent confirmation ── */}
+            {step === "email-sent" && (
+              <motion.div
+                key="email-sent"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                transition={{ duration: 0.25 }}
+                className="space-y-6 text-center"
+              >
+                <div className="flex flex-col items-center gap-4 pt-4">
+                  <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                    <CheckCircle className="w-8 h-8 text-primary" />
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-foreground">Check your email</h2>
+                    <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+                      We sent a magic link to{" "}
+                      <span className="font-semibold text-foreground">{email}</span>.
+                      <br />
+                      Click the link in the email to sign in.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-border bg-muted/40 px-4 py-4 text-left space-y-1">
+                  <p className="text-xs text-muted-foreground">Didn't get it? Check your spam folder, or</p>
+                  <button
+                    onClick={handleSend}
+                    disabled={sending}
+                    className="text-sm text-primary font-semibold disabled:opacity-50"
+                  >
+                    {sending ? "Sending…" : "Resend magic link"}
+                  </button>
+                </div>
+
+                <button
+                  onClick={goBack}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  Use a different email
+                </button>
+              </motion.div>
+            )}
+
+            {/* ── Phone OTP entry ── */}
             {step === "otp" && (
               <motion.div
                 key="otp"
@@ -257,7 +305,7 @@ export default function Login() {
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">Enter OTP</h2>
                   <p className="text-muted-foreground mt-1">
-                    Code sent to <span className="font-medium text-foreground">{displayIdentifier}</span>
+                    Code sent to <span className="font-medium text-foreground">{phone}</span>
                   </p>
                 </div>
 
@@ -286,7 +334,7 @@ export default function Login() {
                       const val = e.target.value.replace(/\D/g, "").slice(0, 6);
                       setOtp(val);
                       setOtpError(false);
-                      if (val.length === 6) handleVerify();
+                      if (val.length === 6) handleVerifyOtp();
                     }}
                     autoFocus
                     inputMode="numeric"
@@ -319,14 +367,14 @@ export default function Login() {
                 </div>
 
                 <Button
-                  onClick={handleVerify}
+                  onClick={handleVerifyOtp}
                   disabled={otp.length < 6 || verifying}
                   className="w-full h-12 text-base font-semibold rounded-xl"
                 >
                   {verifying ? "Verifying…" : "Verify & Continue"}
                 </Button>
                 <button
-                  onClick={handleSendOtp}
+                  onClick={handleSend}
                   disabled={sending}
                   className="w-full text-sm text-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
                 >
