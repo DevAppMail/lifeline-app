@@ -128,7 +128,7 @@ export default function Login() {
               >
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">Enter your number</h2>
-                  <p className="text-muted-foreground mt-1">We'll send a verification code via SMS</p>
+                  <p className="text-muted-foreground mt-1">New or returning? Enter your number to continue</p>
                 </div>
                 <div className="space-y-2">
                   <div className="relative">
