@@ -4,16 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Droplet, Heart, Activity, User, MapPin,
   Stethoscope, HeartPulse, AlertCircle, ChevronLeft, ChevronRight,
-  Building2, CheckCircle2, Flame, Star, Trophy, Sparkles, TrendingUp, ArrowRight,
+  Building2, CheckCircle2, Flame, Star, Trophy, Sparkles, TrendingUp, ArrowRight, Calendar,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import { getSeenIds } from "@/lib/commitments";
 
-const MOCK_ACTIVITY = [
-  { id: 1, title: "Urgent O+ needed at Apollo Hospital, Juhu", time: "10 mins ago", type: "urgent" },
-  { id: 2, title: "Blood drive this Saturday at Shivaji Park, Mumbai", time: "2 hours ago", type: "info" },
-  { id: 3, title: "Free health camp at KEM Hospital tomorrow", time: "Yesterday", type: "success" },
-];
 
 const ADS = [
   {
@@ -46,7 +41,7 @@ const ACTIONS = [
   { label: "Request Blood", icon: <Droplet className="w-6 h-6" />, color: "bg-primary text-white", accent: "bg-white/20", href: "/request-blood" },
   { label: "I'm Available to Donate", icon: <Heart className="w-6 h-6 fill-current" />, color: "bg-rose-100 text-primary dark:bg-primary/20", accent: "bg-primary/10", href: "/donate" },
   { label: "Book Doctor", icon: <Stethoscope className="w-6 h-6" />, color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200", accent: "bg-slate-200/50", href: "/book-doctor" },
-  { label: "My Health", icon: <HeartPulse className="w-6 h-6" />, color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", accent: "bg-emerald-100/50", href: null },
+  { label: "My Health", icon: <HeartPulse className="w-6 h-6" />, color: "bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", accent: "bg-emerald-100/50", href: "/health" },
 ];
 
 type BadgeTier = { label: string; color: string; icon: React.ReactNode };
@@ -55,6 +50,251 @@ function getBadgeTier(count: number): BadgeTier {
   if (count <= 3)   return { label: "Active Donor",   color: "bg-blue-400/25 text-blue-100",    icon: <TrendingUp className="w-3 h-3" /> };
   if (count <= 10)  return { label: "Verified Hero",  color: "bg-emerald-400/25 text-emerald-100", icon: <Star className="w-3 h-3" /> };
   return               { label: "Lifesaver Elite", color: "bg-amber-400/25 text-amber-100",  icon: <Trophy className="w-3 h-3" /> };
+}
+
+// ── Activity Feed ─────────────────────────────────────────────────────────────
+
+interface ActivityBloodRequest {
+  id: number;
+  patient_name: string;
+  blood_group: string;
+  hospital_name: string;
+  hospital_location: string;
+  request_tier: string;
+  created_at: string;
+}
+
+interface ActivityDonation {
+  id: number;
+  hospital_name: string;
+  patient_first_name: string;
+  status: string;
+  created_at: string;
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+function ActivityFeed({ profile }: { profile: NonNullable<ReturnType<typeof useProfile>["profile"]> }) {
+  const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState<ActivityBloodRequest[]>([]);
+  const [donations, setDonations] = useState<ActivityDonation[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      let userId: number | null = null;
+      if (profile.phone) {
+        try {
+          const r = await fetch(`/api/users/lookup?phone=${encodeURIComponent(profile.phone)}`);
+          if (r.ok) { const d = await r.json(); userId = d.user?.id ?? null; }
+        } catch { /* silent */ }
+      }
+
+      const [reqRes, donRes] = await Promise.allSettled([
+        fetch("/api/blood-requests?status=pending").then(r => r.json()),
+        userId
+          ? fetch(`/api/donation-confirmations?donor_user_id=${userId}`).then(r => r.json())
+          : Promise.resolve([]),
+      ]);
+
+      if (cancelled) return;
+      if (reqRes.status === "fulfilled") {
+        setRequests(
+          (reqRes.value as ActivityBloodRequest[])
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 3)
+        );
+      }
+      if (donRes.status === "fulfilled") {
+        setDonations(
+          (donRes.value as ActivityDonation[])
+            .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+            .slice(0, 2)
+        );
+      }
+      setLoading(false);
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [profile.phone]);
+
+  type ActivityItem =
+    | { kind: "request"; data: ActivityBloodRequest }
+    | { kind: "donation"; data: ActivityDonation };
+
+  const items: ActivityItem[] = [
+    ...requests.map(r => ({ kind: "request" as const, data: r })),
+    ...donations.map(d => ({ kind: "donation" as const, data: d })),
+  ].sort((a, b) => new Date(b.data.created_at).getTime() - new Date(a.data.created_at).getTime());
+
+  if (loading) {
+    return (
+      <section className="pb-2">
+        <h2 className="text-base font-bold text-foreground mb-3">Recent Activity</h2>
+        <div className="space-y-2.5">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="bg-card border border-border rounded-2xl p-4 h-[72px] animate-pulse" />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <section className="pb-2">
+        <h2 className="text-base font-bold text-foreground mb-3">Recent Activity</h2>
+        <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center text-center gap-2">
+          <Activity className="w-8 h-8 text-muted-foreground/40" />
+          <p className="text-sm font-medium text-muted-foreground">No recent activity</p>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="pb-2">
+      <h2 className="text-base font-bold text-foreground mb-3">Recent Activity</h2>
+      <div className="space-y-2.5">
+        {items.map((item, i) => {
+          if (item.kind === "request") {
+            const req = item.data;
+            const tierBadge =
+              req.request_tier === "critical" ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+              : req.request_tier === "urgent" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
+              : "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
+            const tierLabel = req.request_tier === "critical" ? "Emergency" : req.request_tier === "urgent" ? "Urgent" : "Pending";
+            return (
+              <motion.div key={`req-${req.id}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+                <Link href={`/requests/${req.id}`} className="block">
+                  <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-3 shadow-sm">
+                    <div className="mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 bg-primary/10 text-primary">
+                      <Droplet className="w-4 h-4 fill-primary/30" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-snug text-foreground">{req.patient_name.split(" ")[0]} needs {req.blood_group} blood</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">{req.hospital_name} · {req.hospital_location}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(req.created_at)}</p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tierBadge}`}>{tierLabel}</span>
+                      <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </Link>
+              </motion.div>
+            );
+          }
+          const don = item.data;
+          const statusBadge =
+            don.status === "confirmed" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+            : don.status === "no_show" ? "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300"
+            : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+          const statusLabel = don.status === "confirmed" ? "Confirmed" : don.status === "no_show" ? "No Show" : "Awaiting";
+          return (
+            <motion.div key={`don-${don.id}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
+              <Link href="/donate" className="block">
+                <div className="bg-card border border-border rounded-2xl p-4 flex items-start gap-3 shadow-sm">
+                  <div className="mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 bg-emerald-500/10 text-emerald-600">
+                    <Calendar className="w-4 h-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium leading-snug text-foreground">Your donation at {don.hospital_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">For {don.patient_first_name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{timeAgo(don.created_at)}</p>
+                  </div>
+                  <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge}`}>{statusLabel}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                  </div>
+                </div>
+              </Link>
+            </motion.div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+// ── Community Events Preview ──────────────────────────────────────────────────
+
+interface CommunityEvent {
+  id: string;
+  title: string;
+  event_type: string;
+  date: string;
+  location: string;
+}
+
+const EVENT_TYPE_META: Record<string, { label: string; color: string }> = {
+  blood_drive:  { label: "Blood Drive",   color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
+  health_camp:  { label: "Health Camp",   color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
+  ngo_campaign: { label: "NGO Campaign",  color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
+};
+
+function EventsPreview() {
+  const [events, setEvents] = useState<CommunityEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/events")
+      .then(r => r.json())
+      .then((data: CommunityEvent[]) => {
+        const now = new Date();
+        setEvents(data.filter(e => new Date(e.date) >= now).slice(0, 3));
+      })
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <section>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-base font-bold text-foreground">Community Events</h2>
+        <Link href="/events" className="text-xs font-semibold text-primary">See all</Link>
+      </div>
+      {loading ? (
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {[1, 2].map(i => <div key={i} className="flex-shrink-0 w-52 h-28 bg-card border border-border rounded-2xl animate-pulse" />)}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="bg-card border border-border rounded-2xl p-5 text-center">
+          <p className="text-sm text-muted-foreground">No upcoming events</p>
+        </div>
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {events.map(event => {
+            const meta = EVENT_TYPE_META[event.event_type] ?? { label: event.event_type, color: "bg-muted text-muted-foreground" };
+            const d = new Date(event.date);
+            return (
+              <Link key={event.id} href={`/events/${event.id}`} className="block flex-shrink-0 w-52">
+                <div className="bg-card border border-border rounded-2xl p-4 h-full">
+                  <span className={`inline-flex text-[10px] font-bold px-2 py-0.5 rounded-full ${meta.color}`}>{meta.label}</span>
+                  <p className="text-sm font-bold text-foreground mt-2 leading-tight line-clamp-2">{event.title}</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1">
+                    <Calendar className="w-3 h-3 flex-shrink-0" />
+                    {d.toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1 truncate">
+                    <MapPin className="w-3 h-3 flex-shrink-0" />{event.location}
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function getProfileCompletion(profile: NonNullable<ReturnType<typeof useProfile>["profile"]>): number {
@@ -258,25 +498,10 @@ export default function Home() {
           </section>
 
           {/* ── ACTIVITY FEED ── */}
-          <section className="pb-2">
-            <h2 className="text-base font-bold text-foreground mb-3">Recent Activity</h2>
-            <div className="space-y-2.5">
-              {MOCK_ACTIVITY.map((item, i) => (
-                <motion.div key={item.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}
-                  className="bg-card border border-border rounded-2xl p-4 flex items-start gap-3 shadow-sm">
-                  <div className={`mt-0.5 w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${item.type === "urgent" ? "bg-destructive/10 text-destructive" : item.type === "success" ? "bg-emerald-500/10 text-emerald-600" : "bg-blue-500/10 text-blue-600"}`}>
-                    {item.type === "urgent" && <AlertCircle className="w-4 h-4" />}
-                    {item.type === "success" && <CheckCircle2 className="w-4 h-4" />}
-                    {item.type === "info" && <Activity className="w-4 h-4" />}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium leading-snug text-foreground">{item.title}</p>
-                    <span className="text-xs text-muted-foreground mt-0.5 block">{item.time}</span>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </section>
+          <ActivityFeed profile={profile} />
+
+          {/* ── COMMUNITY EVENTS ── */}
+          <EventsPreview />
         </div>
       </div>
 

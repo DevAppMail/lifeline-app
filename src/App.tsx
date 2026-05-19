@@ -18,6 +18,9 @@ import BookDoctor from "@/pages/book-doctor";
 import DoctorProfile from "@/pages/doctor-profile";
 import BookAppointment from "@/pages/book-appointment";
 import BookingConfirmed from "@/pages/booking-confirmed";
+import Health from "@/pages/health";
+import Events from "@/pages/events";
+import EventDetail from "@/pages/event-detail";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +58,9 @@ function Router() {
       <Route path="/doctor/:id" component={DoctorProfile} />
       <Route path="/book-appointment/:doctorId" component={BookAppointment} />
       <Route path="/booking-confirmed" component={BookingConfirmed} />
+      <Route path="/health" component={Health} />
+      <Route path="/events" component={Events} />
+      <Route path="/events/:id" component={EventDetail} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -21,6 +21,8 @@ export interface UserProfile {
   preLifelineDonations: number;
   // Last confirmed donation date (ISO date string "YYYY-MM-DD") for eligibility countdown
   lastDonationDate?: string;
+  // User-editable health notes (synced to backend)
+  healthNotes?: string;
 }
 
 interface ProfileContextType {
