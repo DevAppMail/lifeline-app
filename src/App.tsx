@@ -27,18 +27,20 @@ const queryClient = new QueryClient();
 // Public paths that don't require authentication
 const PUBLIC_PATHS = new Set(["/", "/login"]);
 
+const DEV_BYPASS = typeof window !== "undefined" && localStorage.getItem("DEV_BYPASS") === "true";
+
 function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useProfile();
   const [location, navigate] = useLocation();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && !PUBLIC_PATHS.has(location)) {
+    if (!isLoading && !isAuthenticated && !DEV_BYPASS && !PUBLIC_PATHS.has(location)) {
       navigate("/login");
     }
   }, [isAuthenticated, isLoading, location, navigate]);
 
-  // Block render of protected routes until session is resolved
-  if (isLoading && !PUBLIC_PATHS.has(location)) return null;
+  // Block render of protected routes until session is resolved (bypass skips the wait)
+  if (isLoading && !DEV_BYPASS && !PUBLIC_PATHS.has(location)) return null;
   return <>{children}</>;
 }
 

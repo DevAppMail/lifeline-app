@@ -113,6 +113,25 @@ export default function Login() {
     setInputError("");
   };
 
+  const handleDevLogin = () => {
+    localStorage.setItem("DEV_BYPASS", "true");
+    localStorage.setItem("lifeline_profile", JSON.stringify({
+      phone: "919000000000",
+      bloodGroup: "B+",
+      name: "Devraj (Test)",
+      city: "Mumbai",
+      age: 28,
+      gender: "male",
+      donationCount: 3,
+      streakMonths: 2,
+      preLifelineDonations: 1,
+      donatedBefore: true,
+      hasHealthIssues: false,
+      lastDonationDate: "2026-02-10T00:00:00.000Z",
+    }));
+    setLocation("/home");
+  };
+
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background relative overflow-hidden">
       <div className="absolute top-0 left-0 right-0 h-[45%] bg-primary rounded-b-[3rem] -z-0" />
@@ -386,6 +405,15 @@ export default function Login() {
 
           </AnimatePresence>
         </div>
+      </div>
+      {/* Dev bypass — not visible in production builds ideally */}
+      <div className="absolute bottom-8 w-full text-center">
+        <button
+          onClick={handleDevLogin}
+          className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+        >
+          dev login
+        </button>
       </div>
     </div>
   );
