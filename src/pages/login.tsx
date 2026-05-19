@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { Phone, ArrowRight, Droplet, ChevronLeft } from "lucide-react";
+import { Phone, ArrowRight, Droplet, ChevronLeft, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useProfile } from "@/context/profile-context";
 import { supabase } from "@/lib/supabase";
 
-type Step = "phone" | "otp";
+type Step = "input" | "otp";
+type AuthMethod = "email" | "phone";
 
-// Converts Indian mobile numbers to E.164 format for Supabase
 function toE164(raw: string): string {
   const digits = raw.replace(/\D/g, "");
   if (digits.length === 10) return `+91${digits}`;
@@ -22,29 +22,46 @@ export default function Login() {
   const [, setLocation] = useLocation();
   const { profile, updateProfile } = useProfile();
 
-  const [step, setStep] = useState<Step>("phone");
+  const [method, setMethod] = useState<AuthMethod>("email");
+  const [step, setStep] = useState<Step>("input");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
-  const [phoneError, setPhoneError] = useState("");
+  const [inputError, setInputError] = useState("");
   const [otpError, setOtpError] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
+  const handleTabSwitch = (m: AuthMethod) => {
+    setMethod(m);
+    setInputError("");
+  };
+
   const handleSendOtp = async () => {
-    const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) {
-      setPhoneError("Enter a valid 10-digit mobile number");
-      return;
+    setInputError("");
+
+    if (method === "email") {
+      if (!email.includes("@") || !email.includes(".")) {
+        setInputError("Enter a valid email address");
+        return;
+      }
+      setSending(true);
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      setSending(false);
+      if (error) { setInputError(error.message); return; }
+      setStep("otp");
+    } else {
+      const digits = phone.replace(/\D/g, "");
+      if (digits.length < 10) {
+        setInputError("Enter a valid 10-digit mobile number");
+        return;
+      }
+      setSending(true);
+      const { error } = await supabase.auth.signInWithOtp({ phone: toE164(phone) });
+      setSending(false);
+      if (error) { setInputError(error.message); return; }
+      setStep("otp");
     }
-    setSending(true);
-    setPhoneError("");
-    const { error } = await supabase.auth.signInWithOtp({ phone: toE164(phone) });
-    setSending(false);
-    if (error) {
-      setPhoneError(error.message);
-      return;
-    }
-    setStep("otp");
   };
 
   const handleVerify = async () => {
@@ -52,11 +69,12 @@ export default function Login() {
     setVerifying(true);
     setOtpError(false);
 
-    const { error } = await supabase.auth.verifyOtp({
-      phone: toE164(phone),
-      token: otp,
-      type: "sms",
-    });
+    let error;
+    if (method === "email") {
+      ({ error } = await supabase.auth.verifyOtp({ email, token: otp, type: "email" }));
+    } else {
+      ({ error } = await supabase.auth.verifyOtp({ phone: toE164(phone), token: otp, type: "sms" }));
+    }
 
     if (error) {
       setVerifying(false);
@@ -65,30 +83,33 @@ export default function Login() {
       return;
     }
 
-    // Sync donation stats from DB silently — non-blocking
-    try {
-      const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(toE164(phone))}`);
-      if (res.ok) {
-        const data = await res.json() as {
-          user: { id: number; blood_group: string; location: string };
-          donor: { lifeline_donations: number; pre_lifeline_donations: number; last_donation_date: string | null } | null;
-        };
-        updateProfile({
-          phone: toE164(phone),
-          ...(data.user.blood_group ? { bloodGroup: data.user.blood_group as any } : {}),
-          ...(data.user.location ? { city: data.user.location } : {}),
-          ...(data.donor ? {
-            donationCount: data.donor.lifeline_donations,
-            preLifelineDonations: data.donor.pre_lifeline_donations,
-            lastDonationDate: data.donor.last_donation_date ?? undefined,
-          } : {}),
-        });
-      }
-    } catch { /* silent — app works with local profile */ }
+    if (method === "phone") {
+      try {
+        const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(toE164(phone))}`);
+        if (res.ok) {
+          const data = await res.json() as {
+            user: { id: number; blood_group: string; location: string };
+            donor: { lifeline_donations: number; pre_lifeline_donations: number; last_donation_date: string | null } | null;
+          };
+          updateProfile({
+            phone: toE164(phone),
+            ...(data.user.blood_group ? { bloodGroup: data.user.blood_group as any } : {}),
+            ...(data.user.location ? { city: data.user.location } : {}),
+            ...(data.donor ? {
+              donationCount: data.donor.lifeline_donations,
+              preLifelineDonations: data.donor.pre_lifeline_donations,
+              lastDonationDate: data.donor.last_donation_date ?? undefined,
+            } : {}),
+          });
+        }
+      } catch { /* silent */ }
+    }
 
     setVerifying(false);
     setLocation(profile?.name ? "/home" : "/onboarding");
   };
+
+  const displayIdentifier = method === "email" ? email : phone;
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background relative overflow-hidden">
@@ -98,7 +119,7 @@ export default function Login() {
         <div className="p-4 pt-12">
           {step === "otp" && (
             <button
-              onClick={() => { setStep("phone"); setOtp(""); setOtpError(false); }}
+              onClick={() => { setStep("input"); setOtp(""); setOtpError(false); }}
               className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-white"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -117,45 +138,109 @@ export default function Login() {
         <div className="flex-1 bg-background rounded-t-[2.5rem] px-6 pt-8 pb-10">
           <AnimatePresence mode="wait">
 
-            {step === "phone" && (
+            {step === "input" && (
               <motion.div
-                key="phone"
+                key="input"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
                 transition={{ duration: 0.25 }}
                 className="space-y-6"
               >
-                <div>
-                  <h2 className="text-2xl font-bold text-foreground">Enter your number</h2>
-                  <p className="text-muted-foreground mt-1">New or returning? Enter your number to continue</p>
+                {/* Tab pills */}
+                <div className="flex bg-muted rounded-xl p-1 gap-1">
+                  {(["email", "phone"] as AuthMethod[]).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => handleTabSwitch(m)}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                        method === m
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {m === "email" ? <Mail className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+                      {m === "email" ? "Email" : "Phone"}
+                    </button>
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Phone className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground" />
-                    <Input
-                      type="tel"
-                      placeholder="+91 98765 43210"
-                      className="pl-12 h-12 text-base rounded-xl"
-                      value={phone}
-                      onChange={(e) => { setPhone(e.target.value); setPhoneError(""); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleSendOtp(); }}
-                      autoFocus
-                    />
-                  </div>
-                  {phoneError && <p className="text-sm text-destructive font-medium">{phoneError}</p>}
-                </div>
-                <Button
-                  onClick={handleSendOtp}
-                  disabled={sending}
-                  className="w-full h-12 text-base font-semibold rounded-xl group"
-                >
-                  {sending ? "Sending…" : (
-                    <><span>Send OTP</span><ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+
+                <AnimatePresence mode="wait">
+                  {method === "email" ? (
+                    <motion.div
+                      key="email-form"
+                      initial={{ opacity: 0, x: -12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 12 }}
+                      transition={{ duration: 0.18 }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <h2 className="text-2xl font-bold text-foreground">Enter your email</h2>
+                        <p className="text-muted-foreground mt-1 text-sm">We'll send a 6-digit code to your inbox</p>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <Mail className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground" />
+                          <Input
+                            type="email"
+                            placeholder="you@example.com"
+                            className="pl-12 h-12 text-base rounded-xl"
+                            value={email}
+                            onChange={(e) => { setEmail(e.target.value); setInputError(""); }}
+                            onKeyDown={(e) => { if (e.key === "Enter") handleSendOtp(); }}
+                            autoFocus
+                          />
+                        </div>
+                        {inputError && <p className="text-sm text-destructive font-medium">{inputError}</p>}
+                      </div>
+                      <Button
+                        onClick={handleSendOtp}
+                        disabled={sending}
+                        className="w-full h-12 text-base font-semibold rounded-xl group"
+                      >
+                        {sending ? "Sending…" : (
+                          <><span>Send OTP</span><ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" /></>
+                        )}
+                      </Button>
+                    </motion.div>
+                  ) : (
+                    <motion.div
+                      key="phone-form"
+                      initial={{ opacity: 0, x: 12 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: -12 }}
+                      transition={{ duration: 0.18 }}
+                      className="space-y-4"
+                    >
+                      <div>
+                        <h2 className="text-2xl font-bold text-foreground">Enter your number</h2>
+                        <p className="text-muted-foreground mt-1 text-sm">New or returning? Enter your number to continue</p>
+                      </div>
+                      {/* Coming soon notice */}
+                      <div className="rounded-xl border border-border bg-muted/40 px-4 py-5 text-center space-y-1">
+                        <p className="text-sm font-semibold text-foreground">Phone login coming soon</p>
+                        <p className="text-xs text-muted-foreground">SMS verification is not yet available. Please use Email to sign in.</p>
+                      </div>
+                      <div className="relative opacity-50 pointer-events-none">
+                        <Phone className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground" />
+                        <Input
+                          type="tel"
+                          placeholder="+91 98765 43210"
+                          className="pl-12 h-12 text-base rounded-xl"
+                          value={phone}
+                          disabled
+                        />
+                      </div>
+                      <Button disabled className="w-full h-12 text-base font-semibold rounded-xl opacity-50">
+                        Send OTP
+                      </Button>
+                    </motion.div>
                   )}
-                </Button>
+                </AnimatePresence>
+
                 <p className="text-xs text-center text-muted-foreground">
-                  By continuing, you agree to LifeLine's Terms & Privacy Policy
+                  By continuing, you agree to LifeLine's Terms &amp; Privacy Policy
                 </p>
               </motion.div>
             )}
@@ -172,7 +257,7 @@ export default function Login() {
                 <div>
                   <h2 className="text-2xl font-bold text-foreground">Enter OTP</h2>
                   <p className="text-muted-foreground mt-1">
-                    Code sent to <span className="font-medium text-foreground">{phone}</span>
+                    Code sent to <span className="font-medium text-foreground">{displayIdentifier}</span>
                   </p>
                 </div>
 
@@ -193,7 +278,6 @@ export default function Login() {
                       </div>
                     ))}
                   </div>
-                  {/* Hidden input captures keyboard/native input */}
                   <input
                     type="number"
                     className="opacity-0 absolute w-0 h-0"
@@ -216,7 +300,6 @@ export default function Login() {
                   )}
                 </div>
 
-                {/* Custom numpad */}
                 <div className="grid grid-cols-3 gap-3">
                   {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((key) => (
                     <button
@@ -252,6 +335,7 @@ export default function Login() {
                 </button>
               </motion.div>
             )}
+
           </AnimatePresence>
         </div>
       </div>
