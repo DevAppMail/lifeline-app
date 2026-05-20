@@ -19,7 +19,7 @@ function toE164(raw: string): string {
 }
 
 export default function Login() {
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { profile, updateProfile, isAuthenticated, isLoading } = useProfile();
 
   const [method, setMethod] = useState<AuthMethod>("email");
@@ -36,7 +36,7 @@ export default function Login() {
   useEffect(() => {
     if (localStorage.getItem("DEV_BYPASS") !== "true") return;
     const savedRoute = sessionStorage.getItem("dev_bypass_route") || "/home";
-    setLocation(savedRoute);
+    if (location !== savedRoute) setLocation(savedRoute);
   }, []);
 
   // When session establishes on this page (magic link landed on /login instead of /auth/callback)
