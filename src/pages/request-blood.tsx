@@ -861,7 +861,6 @@ export default function RequestBlood() {
   const [selfieSkipped, setSelfieSkipped] = useState(false);
 
   const [paying, setPaying] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
   const [requestId] = useState(genRequestId);
   const [submitting, setSubmitting] = useState(false);
 
@@ -878,13 +877,10 @@ export default function RequestBlood() {
     docUploaded &&
     (selfieData !== null || selfieSkipped || tier === "emergency");
 
-  const matchTime =
-    tier === "emergency" ? "2–4 hours" : tier === "urgent" ? "24–48 hours" : "1–3 days";
-
-  const submitToApi = async () => {
+  const submitToApi = async (): Promise<{ id?: number } | null> => {
     setSubmitting(true);
     try {
-      await fetch("/api/blood-requests", {
+      const res = await fetch("/api/blood-requests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -912,8 +908,10 @@ export default function RequestBlood() {
           verification_skipped: selfieSkipped,
         }),
       });
+      if (res.ok) return (await res.json()) as { id?: number };
+      return null;
     } catch {
-      // Silent — still show confirmation
+      return null;
     } finally {
       setSubmitting(false);
     }
@@ -922,9 +920,18 @@ export default function RequestBlood() {
   const handlePay = async () => {
     setPaying(true);
     await new Promise((r) => setTimeout(r, 2000));
-    await submitToApi();
+    const result = await submitToApi();
     setPaying(false);
-    setConfirmed(true);
+    const qs = new URLSearchParams({
+      bg: bloodGroup,
+      urgency: tier ?? "",
+      hospital,
+      city: hospitalCity,
+      units: String(units),
+    });
+    if (result?.id) qs.set("id", String(result.id));
+    else qs.set("rid", requestId);
+    setLocation(`/request-confirmation?${qs}`);
   };
 
   const Header = ({ title, subtitle }: { title: string; subtitle?: string }) => (
@@ -953,51 +960,6 @@ export default function RequestBlood() {
           setConsentAccepted(true);
         }}
       />
-    );
-  }
-
-  if (confirmed) {
-    return (
-      <div className="min-h-[100dvh] flex flex-col bg-background">
-        <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-          <div className="relative mb-6">
-            <motion.div animate={{ scale: [1, 1.15, 1] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} className="absolute inset-0 bg-primary/20 rounded-full" />
-            <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut", delay: 0.3 }} className="absolute inset-0 bg-primary/10 rounded-full scale-150" />
-            <div className="relative w-24 h-24 bg-primary rounded-full flex items-center justify-center">
-              <Droplet className="w-10 h-10 text-white fill-white" />
-            </div>
-          </div>
-          <h2 className="text-2xl font-bold text-foreground mt-4">Request Submitted!</h2>
-          <p className="text-muted-foreground mt-2 text-sm max-w-xs">We are finding donors for you. You'll be notified as soon as a match is found.</p>
-          <div className="mt-6 w-full bg-card border border-border rounded-2xl p-5 text-left space-y-3">
-            {[
-              ["Request ID", <span className="font-bold text-primary">{requestId}</span>],
-              ["Blood Group", bloodGroup],
-              ["Tier", <span className="capitalize">{tier}</span>],
-              ["Estimated Match", <span className="text-primary font-semibold">{matchTime}</span>],
-              ["Consent Logged", new Date(consentTimestamp).toLocaleTimeString()],
-              ["Identity", selfieData ? "✓ Verified" : selfieSkipped ? "Skipped (Emergency)" : "—"],
-            ].map(([label, value]) => (
-              <div key={String(label)} className="flex justify-between items-center">
-                <span className="text-sm text-muted-foreground">{label}</span>
-                <span className="text-sm font-semibold text-foreground">{value}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 px-4 py-3 bg-primary/8 rounded-xl w-full">
-            <motion.div animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2, repeat: Infinity }} className="flex items-center gap-2 justify-center">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-sm font-medium text-primary">Broadcasting to donors nearby…</span>
-            </motion.div>
-          </div>
-          <Button className="w-full mt-8 h-12 rounded-xl font-semibold" onClick={() => setLocation("/home")}>
-            Back to Home
-          </Button>
-          <p className="text-center text-gray-400 mt-6" style={{ fontSize: "12px" }}>
-            LifeLine is a voluntary donor matching platform — not a blood bank or medical service provider.
-          </p>
-        </div>
-      </div>
     );
   }
 

@@ -11,6 +11,7 @@ import Onboarding from "@/pages/onboarding";
 import Home from "@/pages/home";
 import Profile from "@/pages/profile";
 import RequestBlood from "@/pages/request-blood";
+import RequestConfirmation from "@/pages/request-confirmation";
 import Donate from "@/pages/donate";
 import Requests from "@/pages/requests";
 import RequestDetail from "@/pages/request-detail";
@@ -52,6 +53,7 @@ function Router() {
       <Route path="/home" component={Home} />
       <Route path="/profile" component={Profile} />
       <Route path="/request-blood" component={RequestBlood} />
+      <Route path="/request-confirmation" component={RequestConfirmation} />
       <Route path="/donate" component={Donate} />
       <Route path="/requests" component={Requests} />
       <Route path="/requests/:id" component={RequestDetail} />
