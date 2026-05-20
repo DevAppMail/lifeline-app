@@ -32,9 +32,15 @@ export default function Login() {
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
+  // DEV_BYPASS: fires on mount before any auth check — restores the route that was active at refresh
+  useEffect(() => {
+    if (localStorage.getItem("DEV_BYPASS") !== "true") return;
+    const savedRoute = sessionStorage.getItem("dev_bypass_route") || "/home";
+    setLocation(savedRoute);
+  }, []);
+
   // When session establishes on this page (magic link landed on /login instead of /auth/callback)
   useEffect(() => {
-    if (localStorage.getItem("DEV_BYPASS") === "true") { setLocation("/home"); return; }
     if (isLoading || !isAuthenticated) return;
     (async () => {
       try {

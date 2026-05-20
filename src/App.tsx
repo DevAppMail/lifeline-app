@@ -34,7 +34,14 @@ function AuthGuard({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const devBypass = localStorage.getItem("DEV_BYPASS") === "true";
-    if (!isLoading && !isAuthenticated && !devBypass && !PUBLIC_PATHS.has(location)) {
+    if (devBypass) {
+      // Save the current protected route so login.tsx can restore it if it ever mounts
+      if (!PUBLIC_PATHS.has(location)) {
+        sessionStorage.setItem("dev_bypass_route", location);
+      }
+      return;
+    }
+    if (!isLoading && !isAuthenticated && !PUBLIC_PATHS.has(location)) {
       navigate("/login");
     }
   }, [isAuthenticated, isLoading, location, navigate]);
