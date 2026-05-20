@@ -299,6 +299,15 @@ export default function Login() {
                 <p className="text-xs text-center text-muted-foreground">
                   By continuing, you agree to LifeLine's Terms &amp; Privacy Policy
                 </p>
+
+                <div className="flex justify-center pt-1">
+                  <button
+                    onClick={handleDevLogin}
+                    className="text-xs text-muted-foreground border border-border rounded-lg px-3 py-1.5 hover:bg-muted transition-colors"
+                  >
+                    Dev Login (Test Mode)
+                  </button>
+                </div>
               </motion.div>
             )}
 
@@ -441,15 +450,6 @@ export default function Login() {
 
           </AnimatePresence>
         </div>
-      </div>
-      {/* Dev bypass — not visible in production builds ideally */}
-      <div className="absolute bottom-8 w-full text-center">
-        <button
-          onClick={handleDevLogin}
-          className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
-        >
-          dev login
-        </button>
       </div>
     </div>
   );
