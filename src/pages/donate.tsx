@@ -22,14 +22,15 @@ function getDonorBadge(count: number) {
   return               { label: "Lifesaver Elite", color: "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300",   icon: <Trophy className="w-4 h-4" /> };
 }
 
-function calcEligibility(lastDonationDate?: string): { eligible: boolean; daysRemaining: number; label: string } {
-  if (!lastDonationDate) return { eligible: true, daysRemaining: 0, label: "Eligible to donate today" };
+function calcEligibility(lastDonationDate?: string): { eligible: boolean; daysRemaining: number; label: string; nextDate: string } {
+  if (!lastDonationDate) return { eligible: true, daysRemaining: 0, label: "Eligible to donate today", nextDate: "" };
   const last = new Date(lastDonationDate).getTime();
   const nextEligible = last + 90 * 24 * 60 * 60 * 1000;
   const now = Date.now();
-  if (now >= nextEligible) return { eligible: true, daysRemaining: 0, label: "Eligible to donate today" };
+  if (now >= nextEligible) return { eligible: true, daysRemaining: 0, label: "Eligible to donate today", nextDate: "" };
   const daysRemaining = Math.ceil((nextEligible - now) / (24 * 60 * 60 * 1000));
-  return { eligible: false, daysRemaining, label: `${daysRemaining} days until eligible` };
+  const nextDate = new Date(nextEligible).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
+  return { eligible: false, daysRemaining, label: `${daysRemaining} days until eligible`, nextDate };
 }
 
 const COUPONS = [
@@ -71,13 +72,26 @@ export default function Donate() {
         if (donor) {
           setSyncError(false);
           setDonorRecord(donor);
-          setIsAvailable(donor.availability_toggle);
           donorIdRef.current = donor.id;
           updateProfile({
             donationCount: donor.lifeline_donations,
             preLifelineDonations: donor.pre_lifeline_donations,
             lastDonationDate: donor.last_donation_date ?? undefined,
           });
+          // Auto-disable toggle if donor is within 90-day cooldown
+          const eligible = calcEligibility(donor.last_donation_date ?? undefined).eligible;
+          if (!eligible && donor.availability_toggle) {
+            setIsAvailable(false);
+            try {
+              await fetch(`/api/donors/${donor.id}/toggle`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ availability_toggle: false }),
+              });
+            } catch { /* silent */ }
+          } else {
+            setIsAvailable(donor.availability_toggle);
+          }
         } else {
           setSyncError(true);
         }
@@ -120,6 +134,17 @@ export default function Donate() {
           setCelebrationData({ newCount, newLives: newCount * 3, newStreak });
           setPostState("celebration");
           setCommitments(getCommitments());
+          // Turn off availability immediately — backend also sets this on /respond, but sync UI now
+          setIsAvailable(false);
+          if (donorIdRef.current) {
+            try {
+              await fetch(`/api/donors/${donorIdRef.current}/toggle`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ availability_toggle: false }),
+              });
+            } catch { /* silent */ }
+          }
           return;
         }
       } catch { /* continue */ }
@@ -366,11 +391,17 @@ export default function Donate() {
             <div className="flex-1">
               <p className="font-bold text-lg text-foreground">{isAvailable ? "You are active" : "Set availability"}</p>
               <p className={`text-sm mt-0.5 leading-snug ${isAvailable ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground"}`}>
-                {isAvailable ? "Matching requests will notify you this week." : "Toggle on to receive donation requests this week."}
+                {isAvailable
+                  ? "Matching requests will notify you this week."
+                  : eligibility.eligible
+                  ? "Toggle on to receive donation requests this week."
+                  : "You cannot donate within 90 days of your last donation."}
               </p>
             </div>
-            <button onClick={handleToggle} disabled={loadingToggle}
-              className={`relative w-16 h-9 rounded-full transition-colors duration-300 flex-shrink-0 ml-4 ${isAvailable ? "bg-emerald-500" : "bg-muted"} ${loadingToggle ? "opacity-60" : ""}`}>
+            <button
+              onClick={handleToggle}
+              disabled={loadingToggle || !eligibility.eligible}
+              className={`relative w-16 h-9 rounded-full transition-colors duration-300 flex-shrink-0 ml-4 ${isAvailable ? "bg-emerald-500" : "bg-muted"} ${(loadingToggle || !eligibility.eligible) ? "opacity-40 cursor-not-allowed" : ""}`}>
               <motion.div animate={{ x: isAvailable ? 28 : 4 }} transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 className="absolute top-1.5 w-6 h-6 bg-white rounded-full shadow-md" />
             </button>
@@ -381,6 +412,15 @@ export default function Donate() {
                 className="flex items-center gap-2 bg-emerald-500/10 rounded-xl p-3">
                 <motion.div animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 2, repeat: Infinity }} className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
                 <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Active — broadcasting your availability</span>
+              </motion.div>
+            )}
+            {!eligibility.eligible && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2 bg-muted rounded-xl p-3 mt-2">
+                <Timer className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs font-medium text-muted-foreground">
+                  Available again in {eligibility.daysRemaining} days · {eligibility.nextDate}
+                </span>
               </motion.div>
             )}
             {syncError && (
