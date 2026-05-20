@@ -21,11 +21,12 @@ import BookingConfirmed from "@/pages/booking-confirmed";
 import Health from "@/pages/health";
 import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
+import AuthCallback from "@/pages/auth-callback";
 
 const queryClient = new QueryClient();
 
 // Public paths that don't require authentication
-const PUBLIC_PATHS = new Set(["/", "/login"]);
+const PUBLIC_PATHS = new Set(["/", "/login", "/auth/callback"]);
 
 const DEV_BYPASS = typeof window !== "undefined" && localStorage.getItem("DEV_BYPASS") === "true";
 
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/health" component={Health} />
       <Route path="/events" component={Events} />
       <Route path="/events/:id" component={EventDetail} />
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route component={NotFound} />
     </Switch>
   );

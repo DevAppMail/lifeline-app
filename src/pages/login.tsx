@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, ArrowRight, Droplet, ChevronLeft, Mail, CheckCircle } from "lucide-react";
@@ -20,7 +20,7 @@ function toE164(raw: string): string {
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { profile, updateProfile } = useProfile();
+  const { profile, updateProfile, isAuthenticated, isLoading } = useProfile();
 
   const [method, setMethod] = useState<AuthMethod>("email");
   const [step, setStep] = useState<Step>("input");
@@ -31,6 +31,39 @@ export default function Login() {
   const [otpError, setOtpError] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
+
+  // When session establishes on this page (magic link landed on /login instead of /auth/callback)
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user?.email) { setLocation("/home"); return; }
+        const res = await fetch(`/api/users/lookup?email=${encodeURIComponent(session.user.email)}`);
+        if (res.ok) {
+          const data = await res.json() as {
+            user: { name?: string; blood_group?: string; location?: string };
+            donor: { lifeline_donations: number; pre_lifeline_donations: number; last_donation_date: string | null } | null;
+          };
+          updateProfile({
+            ...(data.user?.blood_group ? { bloodGroup: data.user.blood_group as any } : {}),
+            ...(data.user?.location ? { city: data.user.location } : {}),
+            ...(data.donor ? {
+              donationCount: data.donor.lifeline_donations,
+              preLifelineDonations: data.donor.pre_lifeline_donations,
+              lastDonationDate: data.donor.last_donation_date ?? undefined,
+            } : {}),
+          });
+          setLocation(profile?.name || data.user?.name ? "/home" : "/onboarding");
+        } else {
+          // 404 — user not in backend, new signup
+          setLocation("/onboarding");
+        }
+      } catch {
+        setLocation(profile?.name ? "/home" : "/onboarding");
+      }
+    })();
+  }, [isAuthenticated, isLoading]);
 
   const handleTabSwitch = (m: AuthMethod) => {
     setMethod(m);
@@ -46,7 +79,10 @@ export default function Login() {
         return;
       }
       setSending(true);
-      const { error } = await supabase.auth.signInWithOtp({ email });
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
       setSending(false);
       if (error) { setInputError(error.message); return; }
       setStep("email-sent");
