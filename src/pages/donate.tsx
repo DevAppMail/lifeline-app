@@ -50,6 +50,7 @@ export default function Donate() {
   const [isAvailable, setIsAvailable] = useState(false);
   const [donorRecord, setDonorRecord] = useState<DonorRecord | null>(null);
   const [loadingToggle, setLoadingToggle] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [postState, setPostState] = useState<PostState>("idle");
   const [activeCommitment, setActiveCommitment] = useState<Commitment | null>(null);
@@ -65,9 +66,10 @@ export default function Donate() {
     const fetchDonorData = async () => {
       try {
         const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(profile.phone)}`);
-        if (!res.ok) return;
+        if (!res.ok) { setSyncError(true); return; }
         const { donor } = await res.json() as { donor: DonorRecord | null };
         if (donor) {
+          setSyncError(false);
           setDonorRecord(donor);
           setIsAvailable(donor.availability_toggle);
           donorIdRef.current = donor.id;
@@ -76,8 +78,10 @@ export default function Donate() {
             preLifelineDonations: donor.pre_lifeline_donations,
             lastDonationDate: donor.last_donation_date ?? undefined,
           });
+        } else {
+          setSyncError(true);
         }
-      } catch { /* fallback to localStorage */ }
+      } catch { setSyncError(true); }
     };
 
     fetchDonorData();
@@ -377,6 +381,13 @@ export default function Donate() {
                 className="flex items-center gap-2 bg-emerald-500/10 rounded-xl p-3">
                 <motion.div animate={{ scale: [1, 1.4, 1] }} transition={{ duration: 2, repeat: Infinity }} className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex-shrink-0" />
                 <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Active — broadcasting your availability</span>
+              </motion.div>
+            )}
+            {syncError && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 mt-2">
+                <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Availability sync unavailable — toggle state will not be saved</span>
               </motion.div>
             )}
           </AnimatePresence>
