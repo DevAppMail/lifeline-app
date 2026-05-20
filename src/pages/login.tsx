@@ -19,7 +19,7 @@ function toE164(raw: string): string {
 }
 
 export default function Login() {
-  const [location, setLocation] = useLocation();
+  const [, setLocation] = useLocation();
   const { profile, updateProfile, isAuthenticated, isLoading } = useProfile();
 
   const [method, setMethod] = useState<AuthMethod>("email");
@@ -31,13 +31,6 @@ export default function Login() {
   const [otpError, setOtpError] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
-
-  // DEV_BYPASS: fires on mount before any auth check — restores the route that was active at refresh
-  useEffect(() => {
-    if (localStorage.getItem("DEV_BYPASS") !== "true") return;
-    const savedRoute = sessionStorage.getItem("dev_bypass_route") || "/home";
-    if (location !== savedRoute) setLocation(savedRoute);
-  }, []);
 
   // When session establishes on this page (magic link landed on /login instead of /auth/callback)
   useEffect(() => {
@@ -172,7 +165,7 @@ export default function Login() {
       hasHealthIssues: false,
       lastDonationDate: "2026-02-10T00:00:00.000Z",
     }));
-    setLocation("/home");
+    window.location.href = "/home";
   };
 
   return (

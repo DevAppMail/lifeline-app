@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -32,22 +32,14 @@ function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useProfile();
   const [location, navigate] = useLocation();
 
-  useEffect(() => {
-    const devBypass = localStorage.getItem("DEV_BYPASS") === "true";
-    if (devBypass) {
-      // Save the current protected route so login.tsx can restore it if it ever mounts
-      if (!PUBLIC_PATHS.has(location)) {
-        sessionStorage.setItem("dev_bypass_route", location);
-      }
-      return;
-    }
-    if (!isLoading && !isAuthenticated && !PUBLIC_PATHS.has(location)) {
-      navigate("/login");
-    }
-  }, [isAuthenticated, isLoading, location, navigate]);
+  const DEV_BYPASS = localStorage.getItem("DEV_BYPASS") === "true";
 
-  // Block render of protected routes until session is resolved (bypass skips the wait)
-  if (isLoading && localStorage.getItem("DEV_BYPASS") !== "true" && !PUBLIC_PATHS.has(location)) return null;
+  if (DEV_BYPASS) return <>{children}</>;
+  if (isLoading) return null;
+  if (!isAuthenticated && !PUBLIC_PATHS.has(location)) {
+    navigate("/login");
+    return null;
+  }
   return <>{children}</>;
 }
 
