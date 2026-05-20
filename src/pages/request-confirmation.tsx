@@ -30,7 +30,19 @@ export default function RequestConfirmation() {
   const hospital = params.get("hospital") || "—";
   const city = params.get("city") || "—";
   const units = params.get("units") || "1";
-  const requestId = params.get("id") || params.get("rid") || "";
+
+  const MATCH_TIME: Record<string, string> = { emergency: "2–4 hours", urgent: "24–48 hours" };
+  const estimatedMatch = MATCH_TIME[urgency] ?? "1–3 days";
+
+  const displayRequestId = params.get("rid") || "LL-" + Math.random().toString(36).substr(2, 6).toUpperCase();
+
+  const rawConsent = localStorage.getItem("lifeline_consent_timestamp");
+  const consentLogged = rawConsent
+    ? new Date(rawConsent).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+    : "—";
+
+  const rawIdentity = localStorage.getItem("lifeline_identity_verified");
+  const identityStatus = rawIdentity === "true" ? "✓ Verified" : rawIdentity === "skipped" ? "Skipped (Emergency)" : "—";
 
   const meta = URGENCY_META[urgency] ?? URGENCY_META.scheduled;
 
@@ -84,12 +96,10 @@ export default function RequestConfirmation() {
           transition={{ delay: 0.7 }}
           className="mt-6 w-full bg-card border border-border rounded-2xl p-5 text-left space-y-3"
         >
-          {requestId && (
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">Request ID</span>
-              <span className="text-sm font-bold text-primary">#{requestId}</span>
-            </div>
-          )}
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Request ID</span>
+            <span className="text-sm font-bold text-primary">#{displayRequestId}</span>
+          </div>
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">Blood Group</span>
             <div className="flex items-center gap-1.5">
@@ -114,6 +124,18 @@ export default function RequestConfirmation() {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">Units Needed</span>
             <span className="text-sm font-semibold text-foreground">{units}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Estimated Match</span>
+            <span className="text-sm font-semibold text-primary">{estimatedMatch}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Consent Logged</span>
+            <span className="text-sm font-semibold text-foreground">{consentLogged}</span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Identity</span>
+            <span className="text-sm font-semibold text-foreground">{identityStatus}</span>
           </div>
         </motion.div>
 
