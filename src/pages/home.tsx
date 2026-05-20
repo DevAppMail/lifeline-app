@@ -355,6 +355,8 @@ export default function Home() {
   useEffect(() => { resetTimer(); return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
   useEffect(() => { if (!isLoading && !profile) setLocation("/onboarding"); }, [profile, isLoading, setLocation]);
 
+  const requestsBadge = useRequestsBadge(profile?.bloodGroup ?? "");
+
   if (isLoading || !profile) return null;
 
   const firstName = profile.name.split(" ")[0];
@@ -364,7 +366,6 @@ export default function Home() {
   const lives = donations * 3;
   const badge = getBadgeTier(donations);
   const completion = getProfileCompletion(profile);
-  const requestsBadge = useRequestsBadge(profile.bloodGroup);
 
   const goAd = (dir: 1 | -1) => { setAdIndex((i) => (i + dir + ADS.length) % ADS.length); resetTimer(); };
 
