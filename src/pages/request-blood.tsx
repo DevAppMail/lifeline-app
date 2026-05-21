@@ -821,7 +821,7 @@ export default function RequestBlood() {
 
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState("");
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(1);
   const [tier, setTier] = useState<Tier>(null);
 
   const [patientName, setPatientName] = useState("");
