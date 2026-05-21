@@ -1,16 +1,37 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Droplet, Heart, Activity, User, MapPin,
-  Stethoscope, HeartPulse, AlertCircle, ChevronLeft, ChevronRight,
-  Building2, CheckCircle2, Flame, Star, Trophy, Sparkles, TrendingUp, ArrowRight, Calendar,
+  Stethoscope, HeartPulse, ChevronLeft, ChevronRight,
+  Building2, Flame, Star, Trophy, Sparkles, TrendingUp, ArrowRight, Calendar,
+  X, ExternalLink,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import { getSeenIds } from "@/lib/commitments";
 
+// ── Ad Types ──────────────────────────────────────────────────────────────────
 
-const ADS = [
+interface LiveAd {
+  id: string;
+  title: string;
+  description: string | null;
+  banner_url: string;
+  cta_type: string;
+  cta_url: string | null;
+  is_sponsored: boolean;
+}
+
+interface DefaultBanner {
+  id: string;
+  title: string;
+  description: string | null;
+  image_url: string;
+  cta_url: string | null;
+}
+
+// Static fallback shown only when both API ads and default_banners are empty
+const STATIC_FALLBACK = [
   {
     label: "Health Camp",
     bg: "from-primary to-red-800",
@@ -36,6 +57,103 @@ const ADS = [
     cta: "Learn More",
   },
 ];
+
+// ── Registration Modal ────────────────────────────────────────────────────────
+
+interface RegModalProps {
+  adId: string;
+  prefillName: string;
+  prefillPhone: string;
+  prefillBloodGroup: string;
+  prefillCity: string;
+  onClose: () => void;
+}
+
+function RegistrationModal({ adId, prefillName, prefillPhone, prefillBloodGroup, prefillCity, onClose }: RegModalProps) {
+  const [name, setName] = useState(prefillName);
+  const [phone, setPhone] = useState(prefillPhone);
+  const [bloodGroup, setBloodGroup] = useState(prefillBloodGroup);
+  const [city, setCity] = useState(prefillCity);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
+
+  const submit = async () => {
+    if (!name.trim() || !phone.trim()) return;
+    setSubmitting(true);
+    try {
+      await fetch("/api/ad-registrations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ad_id: adId, user_name: name, user_phone: phone, blood_group: bloodGroup, city }),
+      });
+      setSuccess(true);
+    } catch { /* silent */ } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <motion.div
+        initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+        className="relative z-10 w-full max-w-[430px] bg-background rounded-t-3xl shadow-xl p-6 pb-safe"
+        onClick={e => e.stopPropagation()}
+      >
+        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <X className="w-4 h-4" />
+        </button>
+
+        {success ? (
+          <div className="text-center py-6">
+            <div className="w-14 h-14 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Heart className="w-7 h-7 text-emerald-600 fill-emerald-600" />
+            </div>
+            <h3 className="text-lg font-bold text-foreground">You're registered!</h3>
+            <p className="text-sm text-muted-foreground mt-1">The organizer will contact you soon.</p>
+            <button onClick={onClose}
+              className="mt-5 w-full py-2.5 bg-primary text-white text-sm font-semibold rounded-xl">
+              Done
+            </button>
+          </div>
+        ) : (
+          <>
+            <h3 className="text-lg font-bold text-foreground mb-4">Register for this event</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Full Name *</label>
+                <input value={name} onChange={e => setName(e.target.value)}
+                  className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Phone *</label>
+                <input value={phone} onChange={e => setPhone(e.target.value)} type="tel"
+                  className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">Blood Group</label>
+                  <input value={bloodGroup} onChange={e => setBloodGroup(e.target.value)}
+                    className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1 block">City</label>
+                  <input value={city} onChange={e => setCity(e.target.value)}
+                    className="w-full border border-border rounded-xl px-3 py-2.5 text-sm bg-background text-foreground outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+              </div>
+            </div>
+            <button onClick={submit} disabled={submitting || !name.trim() || !phone.trim()}
+              className="mt-5 w-full py-2.5 bg-primary text-white text-sm font-semibold rounded-xl disabled:opacity-60 transition-opacity">
+              {submitting ? "Submitting…" : "Register Now"}
+            </button>
+          </>
+        )}
+      </motion.div>
+    </div>
+  );
+}
 
 const ACTIONS = [
   { label: "Request Blood", icon: <Droplet className="w-6 h-6" />, color: "bg-primary text-white", accent: "bg-white/20", href: "/request-blood" },
@@ -347,13 +465,63 @@ export default function Home() {
   const [adIndex, setAdIndex] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const resetTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setAdIndex((i) => (i + 1) % ADS.length), 4000);
-  };
+  // Dynamic ad data
+  const [liveAds, setLiveAds] = useState<LiveAd[]>([]);
+  const [defaultBanners, setDefaultBanners] = useState<DefaultBanner[]>([]);
+  const [adsLoaded, setAdsLoaded] = useState(false);
+  const [regModalAdId, setRegModalAdId] = useState<string | null>(null);
 
-  useEffect(() => { resetTimer(); return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, []);
+  const totalAdCount = liveAds.length > 0 ? liveAds.length
+    : defaultBanners.length > 0 ? defaultBanners.length
+    : STATIC_FALLBACK.length;
+
+  const resetTimer = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setAdIndex((i) => (i + 1) % totalAdCount), 4000);
+  }, [totalAdCount]);
+
+  useEffect(() => { resetTimer(); return () => { if (timerRef.current) clearInterval(timerRef.current); }; }, [resetTimer]);
   useEffect(() => { if (!isLoading && !profile) setLocation("/onboarding"); }, [profile, isLoading, setLocation]);
+
+  // Fetch live ads on mount
+  useEffect(() => {
+    fetch("/api/ads/live")
+      .then(r => r.json())
+      .then((data: { ads: LiveAd[]; default_banners: DefaultBanner[] }) => {
+        setLiveAds(data.ads ?? []);
+        setDefaultBanners(data.default_banners ?? []);
+      })
+      .catch(() => { /* fall through to static fallback */ })
+      .finally(() => setAdsLoaded(true));
+  }, []);
+
+  // Fire impression when ad index changes (only for dynamic ads)
+  useEffect(() => {
+    if (!adsLoaded || liveAds.length === 0) return;
+    const ad = liveAds[adIndex];
+    if (!ad) return;
+    fetch("/api/ad-analytics/impression", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ad_id: ad.id }),
+    }).catch(() => { /* silent */ });
+  }, [adIndex, adsLoaded, liveAds]);
+
+  const handleAdCta = (ad: LiveAd) => {
+    fetch("/api/ad-analytics/click", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ad_id: ad.id }),
+    }).catch(() => { /* silent */ });
+
+    if (ad.cta_type === "register_form") {
+      setRegModalAdId(ad.id);
+    } else if (ad.cta_type === "external_url" && ad.cta_url) {
+      window.open(ad.cta_url, "_blank", "noopener,noreferrer");
+    } else if (ad.cta_type === "in_app_page" && ad.cta_url) {
+      setLocation(ad.cta_url);
+    }
+  };
 
   const requestsBadge = useRequestsBadge(profile?.bloodGroup ?? "");
 
@@ -367,7 +535,7 @@ export default function Home() {
   const badge = getBadgeTier(donations);
   const completion = getProfileCompletion(profile);
 
-  const goAd = (dir: 1 | -1) => { setAdIndex((i) => (i + dir + ADS.length) % ADS.length); resetTimer(); };
+  const goAd = (dir: 1 | -1) => { setAdIndex((i) => (i + dir + totalAdCount) % totalAdCount); resetTimer(); };
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background pb-20 relative">
@@ -433,19 +601,90 @@ export default function Home() {
           <section>
             <div className="relative overflow-hidden rounded-2xl h-52 shadow-md">
               <AnimatePresence mode="wait">
-                <motion.div key={adIndex} initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -60 }} transition={{ duration: 0.35 }}
-                  className={`absolute inset-0 bg-gradient-to-br ${ADS[adIndex].bg} p-6 flex items-center justify-between`}>
-                  <div className="flex-1 pr-4">
-                    <span className="text-white/50 text-[10px] uppercase tracking-widest font-bold">{ADS[adIndex].label}</span>
-                    <h3 className="text-white font-bold text-2xl mt-1 leading-tight">{ADS[adIndex].title}</h3>
-                    <p className="text-white/75 text-sm mt-2 leading-relaxed max-w-[210px]">{ADS[adIndex].sub}</p>
-                    <div className="mt-4 inline-flex items-center px-4 py-2 bg-white/20 rounded-full">
-                      <span className="text-white text-xs font-bold">{ADS[adIndex].cta}</span>
+                {/* Dynamic live ads */}
+                {liveAds.length > 0 && (
+                  <motion.div key={`live-${adIndex}`} initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -60 }} transition={{ duration: 0.35 }}
+                    className="absolute inset-0 bg-gray-900">
+                    <img src={liveAds[adIndex % liveAds.length]?.banner_url}
+                      alt={liveAds[adIndex % liveAds.length]?.title}
+                      className="w-full h-full object-cover opacity-80" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-5 flex flex-col justify-end">
+                      {liveAds[adIndex % liveAds.length]?.is_sponsored && (
+                        <span className="text-white/60 text-[10px] uppercase tracking-widest font-bold mb-1">Sponsored</span>
+                      )}
+                      <h3 className="text-white font-bold text-xl leading-tight">
+                        {liveAds[adIndex % liveAds.length]?.title}
+                      </h3>
+                      {liveAds[adIndex % liveAds.length]?.description && (
+                        <p className="text-white/75 text-xs mt-1 line-clamp-1">
+                          {liveAds[adIndex % liveAds.length]?.description}
+                        </p>
+                      )}
+                      <button onClick={() => handleAdCta(liveAds[adIndex % liveAds.length]!)}
+                        className="mt-3 self-start inline-flex items-center gap-1.5 px-4 py-2 bg-white/20 backdrop-blur-sm border border-white/25 rounded-full">
+                        <span className="text-white text-xs font-bold">
+                          {liveAds[adIndex % liveAds.length]?.cta_type === "external_url" ? "Learn More"
+                            : liveAds[adIndex % liveAds.length]?.cta_type === "register_form" ? "Register Free"
+                            : "View"}
+                        </span>
+                        {liveAds[adIndex % liveAds.length]?.cta_type === "external_url" && <ExternalLink className="w-3 h-3 text-white/80" />}
+                      </button>
                     </div>
-                  </div>
-                  <div className="opacity-100 flex-shrink-0 -mr-2">{ADS[adIndex].icon}</div>
-                </motion.div>
+                  </motion.div>
+                )}
+
+                {/* Default banners fallback */}
+                {liveAds.length === 0 && defaultBanners.length > 0 && (
+                  <motion.div key={`banner-${adIndex}`} initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -60 }} transition={{ duration: 0.35 }}
+                    className="absolute inset-0 bg-gray-900">
+                    <img src={defaultBanners[adIndex % defaultBanners.length]?.image_url}
+                      alt={defaultBanners[adIndex % defaultBanners.length]?.title}
+                      className="w-full h-full object-cover opacity-80" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent p-5 flex flex-col justify-end">
+                      <h3 className="text-white font-bold text-xl leading-tight">
+                        {defaultBanners[adIndex % defaultBanners.length]?.title}
+                      </h3>
+                      {defaultBanners[adIndex % defaultBanners.length]?.description && (
+                        <p className="text-white/75 text-xs mt-1 line-clamp-1">
+                          {defaultBanners[adIndex % defaultBanners.length]?.description}
+                        </p>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Static fallback when both are empty */}
+                {liveAds.length === 0 && defaultBanners.length === 0 && adsLoaded && (
+                  <motion.div key={`static-${adIndex}`} initial={{ opacity: 0, x: 60 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -60 }} transition={{ duration: 0.35 }}
+                    className={`absolute inset-0 bg-gradient-to-br ${STATIC_FALLBACK[adIndex % STATIC_FALLBACK.length].bg} p-6 flex items-center justify-between`}>
+                    <div className="flex-1 pr-4">
+                      <span className="text-white/50 text-[10px] uppercase tracking-widest font-bold">
+                        {STATIC_FALLBACK[adIndex % STATIC_FALLBACK.length].label}
+                      </span>
+                      <h3 className="text-white font-bold text-2xl mt-1 leading-tight">
+                        {STATIC_FALLBACK[adIndex % STATIC_FALLBACK.length].title}
+                      </h3>
+                      <p className="text-white/75 text-sm mt-2 leading-relaxed max-w-[210px]">
+                        {STATIC_FALLBACK[adIndex % STATIC_FALLBACK.length].sub}
+                      </p>
+                      <div className="mt-4 inline-flex items-center px-4 py-2 bg-white/20 rounded-full">
+                        <span className="text-white text-xs font-bold">
+                          {STATIC_FALLBACK[adIndex % STATIC_FALLBACK.length].cta}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="opacity-100 flex-shrink-0 -mr-2">
+                      {STATIC_FALLBACK[adIndex % STATIC_FALLBACK.length].icon}
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Loading skeleton */}
+                {!adsLoaded && (
+                  <div className="absolute inset-0 bg-primary/20 animate-pulse rounded-2xl" />
+                )}
               </AnimatePresence>
+
               <button onClick={() => goAd(-1)} className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/25 hover:bg-black/40 rounded-full flex items-center justify-center text-white z-10 transition-colors">
                 <ChevronLeft className="w-4 h-4" />
               </button>
@@ -453,7 +692,7 @@ export default function Home() {
                 <ChevronRight className="w-4 h-4" />
               </button>
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
-                {ADS.map((_, i) => (
+                {Array.from({ length: totalAdCount }).map((_, i) => (
                   <button key={i} onClick={() => { setAdIndex(i); resetTimer(); }}
                     className={`rounded-full transition-all duration-300 ${i === adIndex ? "w-6 h-2 bg-white" : "w-2 h-2 bg-white/45"}`} />
                 ))}
@@ -529,6 +768,20 @@ export default function Home() {
         </Link>
       </nav>
       <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
+
+      {/* Registration Modal */}
+      <AnimatePresence>
+        {regModalAdId && (
+          <RegistrationModal
+            adId={regModalAdId}
+            prefillName={profile.name}
+            prefillPhone={profile.phone}
+            prefillBloodGroup={profile.bloodGroup}
+            prefillCity={profile.city}
+            onClose={() => setRegModalAdId(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
