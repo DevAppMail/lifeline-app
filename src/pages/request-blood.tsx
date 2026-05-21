@@ -231,14 +231,7 @@ function ConsentOverlay({ onAccept }: { onAccept: (ts: string) => void }) {
   const toggle = (i: number) => setExpanded((prev) => (prev === i ? null : i));
 
   const handleAccept = () => {
-    const ts = new Date().toISOString();
-    try {
-      localStorage.setItem(
-        "lifeline_consent",
-        JSON.stringify({ version: CONSENT_VERSION, timestamp: ts, method: "read" })
-      );
-    } catch {}
-    onAccept(ts);
+    onAccept(new Date().toISOString());
   };
 
   return (
@@ -828,21 +821,7 @@ export default function RequestBlood() {
 
   const [consentAccepted, setConsentAccepted] = useState(false);
   const [consentTimestamp, setConsentTimestamp] = useState("");
-  const [step, setStep] = useState(1);
-
-  // Re-consent check: skip overlay if valid stored consent exists (same version, < 180 days old)
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem("lifeline_consent");
-      if (!raw) return;
-      const { version, timestamp } = JSON.parse(raw) as { version: string; timestamp: string };
-      if (version !== CONSENT_VERSION) return;
-      const ageDays = (Date.now() - new Date(timestamp).getTime()) / (1000 * 60 * 60 * 24);
-      if (ageDays > 180) return;
-      setConsentTimestamp(timestamp);
-      setConsentAccepted(true);
-    } catch {}
-  }, []);
+  const [step, setStep] = useState(0);
   const [tier, setTier] = useState<Tier>(null);
 
   const [patientName, setPatientName] = useState("");
