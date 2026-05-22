@@ -20,7 +20,7 @@ export default defineConfig({
     allowedHosts: true,
     proxy: {
       "/api": {
-        target: process.env.VITE_API_URL ?? "http://localhost:3001",
+        target: process.env.VITE_API_URL ?? "https://lifeline-admin-production.up.railway.app",
         changeOrigin: true,
       },
     },
