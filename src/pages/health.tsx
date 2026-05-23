@@ -1,82 +1,81 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronLeft, Droplet, Heart, Activity, User,
-  Timer, CheckCircle2, Flame, Sparkles, TrendingUp, Star, Trophy,
-  XCircle, Save,
+  ChevronLeft, ChevronRight, Droplet, Heart, Activity, User,
+  Timer, Clock, Users, Stethoscope, Bell, Save, CheckCircle2,
+  Pencil, Check, X, Plus, Trash2, Phone,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
+import { getTimeline, getProviders, getPendingFollowUps, getCareCircle } from "@/lib/health-store";
+import type { EmergencyContact } from "@/types/health";
 
-function calcEligibility(lastDonationDate?: string): { eligible: boolean; daysRemaining: number; nextDate: string } {
+function calcEligibility(lastDonationDate?: string) {
   if (!lastDonationDate) return { eligible: true, daysRemaining: 0, nextDate: "" };
-  const last = new Date(lastDonationDate).getTime();
-  const nextEligible = last + 90 * 24 * 60 * 60 * 1000;
+  const next = new Date(lastDonationDate).getTime() + 90 * 24 * 60 * 60 * 1000;
   const now = Date.now();
-  if (now >= nextEligible) return { eligible: true, daysRemaining: 0, nextDate: "" };
-  const daysRemaining = Math.ceil((nextEligible - now) / (24 * 60 * 60 * 1000));
-  const nextDate = new Date(nextEligible).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-  return { eligible: false, daysRemaining, nextDate };
+  if (now >= next) return { eligible: true, daysRemaining: 0, nextDate: "" };
+  return {
+    eligible: false,
+    daysRemaining: Math.ceil((next - now) / 86400000),
+    nextDate: new Date(next).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+  };
 }
 
-function getDonorBadge(count: number) {
-  if (count === 0)  return { label: "New Donor",      color: "bg-white/20 text-white border-white/25", icon: <Sparkles className="w-3.5 h-3.5" /> };
-  if (count <= 3)   return { label: "Active Donor",   color: "bg-white/20 text-white border-white/25", icon: <TrendingUp className="w-3.5 h-3.5" /> };
-  if (count <= 10)  return { label: "Verified Hero",  color: "bg-white/20 text-white border-white/25", icon: <Star className="w-3.5 h-3.5" /> };
-  return               { label: "Lifesaver Elite", color: "bg-white/20 text-white border-white/25", icon: <Trophy className="w-3.5 h-3.5" /> };
-}
-
-interface DonationRecord {
-  id: number;
-  hospital_name: string;
-  patient_first_name: string;
-  donation_date?: string;
-  status: string;
-  created_at: string;
+function generateContactId() {
+  return `ec-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 }
 
 export default function Health() {
   const [, setLocation] = useLocation();
   const { profile, updateProfile } = useProfile();
 
+  // Live counts from health-store
+  const [timelineCount, setTimelineCount] = useState(0);
+  const [providersCount, setProvidersCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [careCircleCount, setCareCircleCount] = useState(0);
+
+  // Health identity editing
+  const [editingIdentity, setEditingIdentity] = useState(false);
+  const [eAllergies, setEAllergies] = useState("");
+  const [eConditions, setEConditions] = useState("");
+  const [eLanguage, setELanguage] = useState("");
+
+  // Emergency contacts
+  const [editingContacts, setEditingContacts] = useState(false);
+  const [newContactName, setNewContactName] = useState("");
+  const [newContactPhone, setNewContactPhone] = useState("");
+  const [newContactRel, setNewContactRel] = useState("");
+
+  // Health notes
   const [userId, setUserId] = useState<number | null>(null);
-  const [donations, setDonations] = useState<DonationRecord[]>([]);
-  const [loadingDonations, setLoadingDonations] = useState(true);
   const [healthNotes, setHealthNotes] = useState(profile?.healthNotes ?? "");
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
 
-  // Resolve user ID and load health_notes from backend
+  useEffect(() => {
+    setTimelineCount(getTimeline().length);
+    setProvidersCount(getProviders().length);
+    setPendingCount(getPendingFollowUps().length);
+    setCareCircleCount(getCareCircle().length);
+  }, []);
+
   useEffect(() => {
     if (!profile?.phone) return;
-    (async () => {
-      try {
-        const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(profile.phone)}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        setUserId(data.user?.id ?? null);
-        if (data.user?.health_notes != null) {
-          setHealthNotes(data.user.health_notes);
-          updateProfile({ healthNotes: data.user.health_notes });
+    fetch(`/api/users/lookup?phone=${encodeURIComponent(profile.phone)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.user) {
+          setUserId(data.user.id ?? null);
+          if (data.user.health_notes != null) {
+            setHealthNotes(data.user.health_notes);
+            updateProfile({ healthNotes: data.user.health_notes });
+          }
         }
-      } catch { /* silent */ }
-    })();
+      })
+      .catch(() => {});
   }, [profile?.phone]);
-
-  // Load donation history once userId is known
-  useEffect(() => {
-    if (!userId) { setLoadingDonations(false); return; }
-    (async () => {
-      try {
-        const res = await fetch(`/api/donation-confirmations?donor_user_id=${userId}`);
-        if (res.ok) {
-          const data: DonationRecord[] = await res.json();
-          setDonations(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-        }
-      } catch { /* silent */ }
-      setLoadingDonations(false);
-    })();
-  }, [userId]);
 
   const handleSaveNotes = useCallback(async () => {
     setNotesSaving(true);
@@ -97,188 +96,343 @@ export default function Health() {
 
   if (!profile) return null;
 
-  const donationCount = profile.donationCount ?? 0;
-  const lives = donationCount * 3;
-  const badge = getDonorBadge(donationCount);
   const eligibility = calcEligibility(profile.lastDonationDate);
-  const lastDonationDisplay = profile.lastDonationDate
-    ? new Date(profile.lastDonationDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-    : "Never";
+  const contacts = profile.emergency_contacts ?? [];
+
+  const startEditIdentity = () => {
+    setEAllergies((profile.allergies ?? []).join(", "));
+    setEConditions((profile.chronic_conditions ?? []).join(", "));
+    setELanguage(profile.preferred_language ?? "");
+    setEditingIdentity(true);
+  };
+
+  const saveIdentity = () => {
+    updateProfile({
+      allergies: eAllergies.split(",").map(s => s.trim()).filter(Boolean),
+      chronic_conditions: eConditions.split(",").map(s => s.trim()).filter(Boolean),
+      preferred_language: eLanguage.trim() || undefined,
+    });
+    setEditingIdentity(false);
+  };
+
+  const addContact = () => {
+    if (!newContactName.trim() || !newContactPhone.trim()) return;
+    const contact: EmergencyContact = {
+      id: generateContactId(),
+      name: newContactName.trim(),
+      phone: newContactPhone.trim(),
+      relationship: newContactRel.trim() || "Contact",
+    };
+    updateProfile({ emergency_contacts: [...contacts, contact] });
+    setNewContactName(""); setNewContactPhone(""); setNewContactRel("");
+  };
+
+  const removeContact = (id: string) => {
+    updateProfile({ emergency_contacts: contacts.filter(c => c.id !== id) });
+  };
+
+  const hubCards = [
+    {
+      label: "Health Timeline",
+      sub: timelineCount > 0 ? `${timelineCount} entries` : "Your health story",
+      icon: <Clock className="w-5 h-5 text-blue-600 dark:text-blue-400" />,
+      bg: "bg-blue-50 dark:bg-blue-950/30",
+      href: "/health-timeline",
+    },
+    {
+      label: "Follow-Up Approvals",
+      sub: pendingCount > 0 ? `${pendingCount} pending` : "All clear",
+      icon: <Bell className="w-5 h-5 text-amber-600 dark:text-amber-400" />,
+      bg: "bg-amber-50 dark:bg-amber-950/30",
+      href: "/follow-ups",
+      badge: pendingCount,
+    },
+    {
+      label: "My Providers",
+      sub: providersCount > 0 ? `${providersCount} added` : "Add your care team",
+      icon: <Stethoscope className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />,
+      bg: "bg-emerald-50 dark:bg-emerald-950/30",
+      href: "/providers",
+    },
+    {
+      label: "Care Circle",
+      sub: careCircleCount > 0 ? `${careCircleCount} members` : "Add trusted family",
+      icon: <Users className="w-5 h-5 text-purple-600 dark:text-purple-400" />,
+      bg: "bg-purple-50 dark:bg-purple-950/30",
+      href: "/care-circle",
+    },
+  ];
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background pb-24">
+
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pt-12 pb-5 border-b border-border">
-        <button onClick={() => setLocation("/home")} className="w-10 h-10 rounded-full flex items-center justify-center bg-muted hover:bg-muted/80">
+      <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-border">
+        <button onClick={() => setLocation("/home")}
+          className="w-10 h-10 rounded-full flex items-center justify-center bg-muted hover:bg-muted/80">
           <ChevronLeft className="w-5 h-5" />
         </button>
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold">My Health</h1>
-          <p className="text-sm text-muted-foreground">Your donor profile</p>
+          <p className="text-xs text-muted-foreground font-mono tracking-wider mt-0.5">
+            {profile.lifeline_id ?? "Generating ID…"}
+          </p>
+        </div>
+        {/* ABHA placeholder */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-dashed border-border text-xs text-muted-foreground">
+          <span className="w-2 h-2 rounded-full bg-muted-foreground/40" />
+          Link ABHA
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 pt-5 space-y-5">
 
-        {/* Hero Card */}
-        <div className="bg-primary rounded-2xl p-5 relative overflow-hidden shadow-lg shadow-primary/20">
-          <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/5 rounded-full" />
-          <div className="absolute top-8 right-8 w-16 h-16 bg-white/5 rounded-full" />
-          <div className="relative z-10">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30 flex-shrink-0">
-                <Droplet className="w-7 h-7 text-white fill-white/60" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-white truncate">{profile.name}</h2>
-                <p className="text-white/70 text-sm mt-0.5">{profile.city || "—"}</p>
-              </div>
-              <div className="bg-white/20 border border-white/30 rounded-xl px-3 py-2 text-center flex-shrink-0">
-                <span className="text-white font-bold text-2xl leading-none">{profile.bloodGroup || "?"}</span>
-              </div>
-            </div>
-            <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${badge.color}`}>
-              {badge.icon}
-              {badge.label}
-            </div>
-          </div>
-        </div>
-
-        {/* Eligibility */}
+        {/* Donation Eligibility */}
         <div className={`rounded-2xl p-4 border-2 flex items-center gap-4 ${
           eligibility.eligible
-            ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-700"
+            ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800"
             : "border-border bg-card"
         }`}>
           <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
             eligibility.eligible ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-muted"
           }`}>
             {eligibility.eligible
-              ? <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }} className="w-4 h-4 rounded-full bg-emerald-500" />
+              ? <motion.div animate={{ scale: [1, 1.3, 1] }} transition={{ duration: 2, repeat: Infinity }}
+                  className="w-4 h-4 rounded-full bg-emerald-500" />
               : <Timer className="w-5 h-5 text-muted-foreground" />}
           </div>
-          <div>
+          <div className="flex-1 min-w-0">
             <p className={`font-bold text-sm ${eligibility.eligible ? "text-emerald-700 dark:text-emerald-400" : "text-foreground"}`}>
               {eligibility.eligible ? "Eligible to donate today" : `Next eligible: ${eligibility.nextDate}`}
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {eligibility.eligible
                 ? "You can safely donate blood right now."
-                : `${eligibility.daysRemaining} days remaining — 90-day gap required by medical guidelines.`}
+                : `${eligibility.daysRemaining} days remaining — 90-day gap required.`}
             </p>
           </div>
+          <Link href="/donate">
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </Link>
         </div>
 
-        {/* Stats Row */}
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { icon: <Droplet className="w-5 h-5 text-primary fill-primary/40" />, value: String(donationCount), label: "Donations" },
-            { icon: <Heart className="w-5 h-5 text-rose-500 fill-rose-200" />,    value: String(lives),         label: "Lives Impacted" },
-            { icon: <Flame className="w-5 h-5 text-orange-500" />,               value: lastDonationDisplay,   label: "Last Donation", small: true },
-          ].map(stat => (
-            <div key={stat.label} className="bg-card border border-border rounded-2xl p-4 flex flex-col items-center gap-1.5">
-              {stat.icon}
-              <span className={`font-bold text-foreground text-center leading-tight ${stat.small ? "text-xs" : "text-2xl"}`}>{stat.value}</span>
-              <span className="text-[10px] text-muted-foreground text-center leading-tight">{stat.label}</span>
+        {/* Hub Grid */}
+        <section>
+          <h2 className="text-base font-bold text-foreground mb-3">Your Health</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {hubCards.map((card) => (
+              <Link key={card.label} href={card.href} className="block">
+                <motion.div whileTap={{ scale: 0.97 }}
+                  className={`${card.bg} rounded-2xl p-4 relative border border-transparent hover:border-border transition-colors`}>
+                  {card.badge ? (
+                    <span className="absolute top-3 right-3 min-w-[20px] h-5 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1.5">
+                      {card.badge}
+                    </span>
+                  ) : null}
+                  <div className="w-9 h-9 bg-white/60 dark:bg-black/20 rounded-xl flex items-center justify-center mb-3 shadow-sm">
+                    {card.icon}
+                  </div>
+                  <p className="text-sm font-bold text-foreground leading-tight">{card.label}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>
+                </motion.div>
+              </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* Health Identity Snapshot */}
+        <section className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <p className="text-sm font-bold text-foreground">Health Identity</p>
+            {editingIdentity ? (
+              <div className="flex gap-2">
+                <button onClick={() => setEditingIdentity(false)}
+                  className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button onClick={saveIdentity}
+                  className="w-8 h-8 rounded-full bg-primary flex items-center justify-center">
+                  <Check className="w-4 h-4 text-white" />
+                </button>
+              </div>
+            ) : (
+              <button onClick={startEditIdentity}
+                className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+                <Pencil className="w-4 h-4 text-muted-foreground" />
+              </button>
+            )}
+          </div>
+
+          <AnimatePresence mode="wait">
+            {editingIdentity ? (
+              <motion.div key="editing" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="p-4 space-y-3">
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                    Allergies <span className="font-normal">(comma-separated)</span>
+                  </label>
+                  <input value={eAllergies} onChange={e => setEAllergies(e.target.value)}
+                    placeholder="e.g. Penicillin, Dust, Latex"
+                    className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                    Chronic Conditions <span className="font-normal">(comma-separated)</span>
+                  </label>
+                  <input value={eConditions} onChange={e => setEConditions(e.target.value)}
+                    placeholder="e.g. Diabetes, Hypertension"
+                    className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-muted-foreground block mb-1">
+                    Preferred Language
+                  </label>
+                  <select value={eLanguage} onChange={e => setELanguage(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30">
+                    <option value="">Select language</option>
+                    {["English", "Hindi", "Marathi", "Tamil", "Telugu", "Kannada", "Bengali", "Gujarati", "Punjabi", "Malayalam"].map(l => (
+                      <option key={l} value={l}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div key="view" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                {[
+                  {
+                    label: "Allergies",
+                    value: (profile.allergies ?? []).length > 0
+                      ? (profile.allergies ?? []).join(", ")
+                      : "None recorded",
+                    warn: (profile.allergies ?? []).length > 0,
+                  },
+                  {
+                    label: "Chronic Conditions",
+                    value: (profile.chronic_conditions ?? []).length > 0
+                      ? (profile.chronic_conditions ?? []).join(", ")
+                      : "None recorded",
+                    warn: false,
+                  },
+                  {
+                    label: "Preferred Language",
+                    value: profile.preferred_language || "Not set",
+                    warn: false,
+                  },
+                ].map((row, i, arr) => (
+                  <div key={row.label} className={`flex items-start gap-3 px-4 py-3 ${i < arr.length - 1 ? "border-b border-border" : ""}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground">{row.label}</p>
+                      <p className={`text-sm font-medium mt-0.5 ${row.warn ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
+                        {row.value}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </section>
+
+        {/* Emergency Contacts */}
+        <section className="bg-card border border-border rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+            <p className="text-sm font-bold text-foreground">Emergency Contacts</p>
+            <button onClick={() => setEditingContacts(v => !v)}
+              className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+              {editingContacts
+                ? <X className="w-4 h-4 text-muted-foreground" />
+                : <Plus className="w-4 h-4 text-muted-foreground" />}
+            </button>
+          </div>
+
+          {contacts.map((c, i) => (
+            <div key={c.id} className={`flex items-center gap-3 px-4 py-3 ${i < contacts.length - 1 || editingContacts ? "border-b border-border" : ""}`}>
+              <div className="w-8 h-8 rounded-xl bg-muted flex items-center justify-center flex-shrink-0">
+                <Phone className="w-4 h-4 text-muted-foreground" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-foreground">{c.name}</p>
+                <p className="text-xs text-muted-foreground">{c.relationship} · {c.phone}</p>
+              </div>
+              {editingContacts && (
+                <button onClick={() => removeContact(c.id)} className="text-destructive/70 hover:text-destructive">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           ))}
-        </div>
+
+          <AnimatePresence>
+            {editingContacts && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden">
+                <div className="p-4 space-y-2.5 border-t border-border">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={newContactName} onChange={e => setNewContactName(e.target.value)}
+                      placeholder="Name *"
+                      className="px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                    <input value={newContactRel} onChange={e => setNewContactRel(e.target.value)}
+                      placeholder="Relationship"
+                      className="px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                  </div>
+                  <input value={newContactPhone} onChange={e => setNewContactPhone(e.target.value)}
+                    placeholder="Phone number *" type="tel"
+                    className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                  <button onClick={addContact} disabled={!newContactName.trim() || !newContactPhone.trim()}
+                    className="w-full py-2.5 bg-primary text-white text-sm font-bold rounded-xl disabled:opacity-50">
+                    Add Contact
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {contacts.length === 0 && !editingContacts && (
+            <div className="px-4 py-5 text-center">
+              <p className="text-sm text-muted-foreground">No emergency contacts added.</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">Tap + to add family or friends.</p>
+            </div>
+          )}
+        </section>
 
         {/* Health Notes */}
-        <div className="bg-card border border-border rounded-2xl p-5">
+        <section className="bg-card border border-border rounded-2xl p-5">
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Health Notes</p>
           <textarea
             value={healthNotes}
             onChange={e => { setHealthNotes(e.target.value); setNotesSaved(false); }}
-            placeholder="Add health conditions, medications, allergies, or notes for medical staff..."
+            placeholder="Add medications, allergies, or notes for medical staff..."
             rows={4}
-            className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary resize-none"
+            className="w-full px-4 py-3 bg-muted/50 border border-border rounded-xl text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"
           />
-          <button
-            onClick={handleSaveNotes}
-            disabled={notesSaving}
+          <button onClick={handleSaveNotes} disabled={notesSaving}
             className={`mt-3 w-full h-11 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-colors disabled:opacity-60 ${
               notesSaved ? "bg-emerald-500 text-white" : "bg-primary text-white"
-            }`}
-          >
+            }`}>
             {notesSaving
               ? <div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
               : notesSaved
               ? <><CheckCircle2 className="w-4 h-4" /> Saved</>
               : <><Save className="w-4 h-4" /> Save Notes</>}
           </button>
-        </div>
+        </section>
 
-        {/* Donation History Timeline */}
-        <div className="pb-2">
-          <h2 className="text-base font-bold text-foreground mb-3">Donation History</h2>
-          {loadingDonations ? (
-            <div className="space-y-2.5">
-              {[1, 2].map(i => <div key={i} className="bg-card border border-border rounded-2xl p-4 h-16 animate-pulse" />)}
-            </div>
-          ) : donations.length === 0 ? (
-            <div className="bg-card border border-border rounded-2xl p-8 flex flex-col items-center text-center gap-2">
-              <div className="w-12 h-12 bg-muted rounded-2xl flex items-center justify-center mb-1">
-                <Droplet className="w-6 h-6 text-muted-foreground/40" />
-              </div>
-              <p className="text-sm font-semibold text-foreground">No donations recorded</p>
-              <p className="text-xs text-muted-foreground leading-relaxed">Confirmed donations via LifeLine will appear here.</p>
-              <Link href="/requests" className="mt-2 inline-flex items-center gap-2 bg-primary text-white px-5 py-2.5 rounded-xl text-sm font-bold">
-                Find a Request
-              </Link>
-            </div>
-          ) : (
-            <div className="space-y-2.5 relative">
-              <div className="absolute left-[19px] top-5 bottom-5 w-0.5 bg-border" />
-              {donations.map((d, i) => {
-                const isConfirmed = d.status === "confirmed";
-                const isNoShow = d.status === "no_show";
-                const dateDisplay = d.donation_date
-                  ? new Date(d.donation_date + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-                  : new Date(d.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-                return (
-                  <motion.div key={d.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.07 }}
-                    className="flex items-start gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 z-10 ${
-                      isConfirmed ? "bg-emerald-100 dark:bg-emerald-900/40"
-                      : isNoShow  ? "bg-muted"
-                      : "bg-amber-100 dark:bg-amber-900/30"
-                    }`}>
-                      {isConfirmed
-                        ? <Heart className="w-5 h-5 text-emerald-600 fill-emerald-200" />
-                        : isNoShow
-                        ? <XCircle className="w-5 h-5 text-muted-foreground" />
-                        : <Timer className="w-5 h-5 text-amber-600" />}
-                    </div>
-                    <div className="flex-1 bg-card border border-border rounded-2xl p-3.5 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-foreground truncate">{d.hospital_name}</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">For {d.patient_first_name} · {dateDisplay}</p>
-                        </div>
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
-                          isConfirmed ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                          : isNoShow  ? "bg-muted text-muted-foreground"
-                          : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"
-                        }`}>
-                          {isConfirmed ? "Confirmed" : isNoShow ? "No Show" : "Pending"}
-                        </span>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
 
       {/* Bottom Nav */}
       <nav className="fixed bottom-0 w-full max-w-[430px] bg-card/95 backdrop-blur-md border-t border-border flex justify-around py-3 pb-safe z-50">
-        <Link href="/home" className="flex flex-col items-center gap-1 text-muted-foreground"><Heart className="w-5 h-5" /><span className="text-[10px] font-medium">Home</span></Link>
-        <Link href="/donate" className="flex flex-col items-center gap-1 text-muted-foreground"><Droplet className="w-5 h-5" /><span className="text-[10px] font-medium">Donate</span></Link>
-        <Link href="/requests" className="flex flex-col items-center gap-1 text-muted-foreground"><Activity className="w-5 h-5" /><span className="text-[10px] font-medium">Requests</span></Link>
-        <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground"><User className="w-5 h-5" /><span className="text-[10px] font-medium">Profile</span></Link>
+        <Link href="/home" className="flex flex-col items-center gap-1 text-muted-foreground">
+          <Heart className="w-5 h-5" /><span className="text-[10px] font-medium">Home</span>
+        </Link>
+        <Link href="/donate" className="flex flex-col items-center gap-1 text-muted-foreground">
+          <Droplet className="w-5 h-5" /><span className="text-[10px] font-medium">Donate</span>
+        </Link>
+        <Link href="/requests" className="flex flex-col items-center gap-1 text-muted-foreground">
+          <Activity className="w-5 h-5" /><span className="text-[10px] font-medium">Requests</span>
+        </Link>
+        <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground">
+          <User className="w-5 h-5" /><span className="text-[10px] font-medium">Profile</span>
+        </Link>
       </nav>
       <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
     </div>

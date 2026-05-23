@@ -1,10 +1,37 @@
-import { type ReactNode } from "react";
+import { type ReactNode, Component, type ErrorInfo } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProfileProvider, useProfile } from "@/context/profile-context";
 import NotFound from "@/pages/not-found";
+
+// ── Global error boundary ──────────────────────────────────────────────────────
+class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null };
+  static getDerivedStateFromError(error: Error) { return { error }; }
+  componentDidCatch(error: Error, info: ErrorInfo) { console.error("App crash:", error, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-[100dvh] flex flex-col items-center justify-center p-8 text-center bg-background">
+          <div className="w-14 h-14 rounded-2xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center mb-4">
+            <span className="text-red-600 font-bold text-xl">!</span>
+          </div>
+          <p className="font-bold text-foreground mb-1">Something went wrong</p>
+          <p className="text-sm text-muted-foreground mb-5">{(this.state.error as Error).message}</p>
+          <button
+            className="px-5 py-2.5 bg-primary text-white text-sm font-bold rounded-xl"
+            onClick={() => this.setState({ error: null })}
+          >
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 import Login from "@/pages/login";
 import Onboarding from "@/pages/onboarding";
@@ -20,6 +47,10 @@ import DoctorProfile from "@/pages/doctor-profile";
 import BookAppointment from "@/pages/book-appointment";
 import BookingConfirmed from "@/pages/booking-confirmed";
 import Health from "@/pages/health";
+import HealthTimeline from "@/pages/health-timeline";
+import FollowUps from "@/pages/follow-ups";
+import Providers from "@/pages/providers";
+import CareCircle from "@/pages/care-circle";
 import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
 import AuthCallback from "@/pages/auth-callback";
@@ -62,6 +93,10 @@ function Router() {
       <Route path="/book-appointment/:doctorId" component={BookAppointment} />
       <Route path="/booking-confirmed" component={BookingConfirmed} />
       <Route path="/health" component={Health} />
+      <Route path="/health-timeline" component={HealthTimeline} />
+      <Route path="/follow-ups" component={FollowUps} />
+      <Route path="/providers" component={Providers} />
+      <Route path="/care-circle" component={CareCircle} />
       <Route path="/events" component={Events} />
       <Route path="/events/:id" component={EventDetail} />
       <Route path="/auth/callback" component={AuthCallback} />
@@ -72,31 +107,33 @@ function Router() {
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ProfileProvider>
-        <TooltipProvider>
-          <div className="w-full flex justify-center bg-zinc-950 min-h-[100dvh]">
-            <div className="w-full max-w-[430px] bg-background shadow-2xl relative overflow-x-hidden min-h-[100dvh]">
-              <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-                <AuthGuard>
-                  <Router />
-                </AuthGuard>
-              </WouterRouter>
-              {/* Platform identity footer */}
-              <div
-                className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] py-1.5 px-4 bg-background/80 backdrop-blur-sm text-center pointer-events-none"
-                style={{ zIndex: 4 }}
-              >
-                <p className="text-[10px] text-muted-foreground/40 leading-tight">
-                  LifeLine is a voluntary donor matching platform — not a blood bank or medical service provider.
-                </p>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ProfileProvider>
+          <TooltipProvider>
+            <div className="w-full flex justify-center bg-zinc-950 min-h-[100dvh]">
+              <div className="w-full max-w-[430px] bg-background shadow-2xl relative overflow-x-hidden min-h-[100dvh]">
+                <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+                  <AuthGuard>
+                    <Router />
+                  </AuthGuard>
+                </WouterRouter>
+                {/* Platform identity footer */}
+                <div
+                  className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] py-1.5 px-4 bg-background/80 backdrop-blur-sm text-center pointer-events-none"
+                  style={{ zIndex: 4 }}
+                >
+                  <p className="text-[10px] text-muted-foreground/40 leading-tight">
+                    LifeLine is a voluntary donor matching platform — not a blood bank or medical service provider.
+                  </p>
+                </div>
+                <Toaster />
               </div>
-              <Toaster />
             </div>
-          </div>
-        </TooltipProvider>
-      </ProfileProvider>
-    </QueryClientProvider>
+          </TooltipProvider>
+        </ProfileProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }
 

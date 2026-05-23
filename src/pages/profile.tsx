@@ -292,7 +292,9 @@ export default function Profile() {
               <p className="text-white/70 text-xs mt-0.5 flex items-center gap-1">
                 <MapPin className="w-3 h-3" /> {profile.city}
               </p>
-              <p className="text-white/50 text-xs mt-0.5">Member since {memberSince}</p>
+              {profile.lifeline_id && (
+                <p className="text-white/50 text-xs mt-0.5 font-mono tracking-wider">{profile.lifeline_id}</p>
+              )}
             </div>
             <div className="flex flex-col items-center bg-white rounded-xl px-3 py-2 flex-shrink-0">
               <Droplet className="w-4 h-4 text-primary fill-primary mb-0.5" />

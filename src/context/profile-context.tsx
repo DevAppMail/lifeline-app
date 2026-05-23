@@ -1,8 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
+import { generateLifelineId } from "@/lib/lifeline-id";
+import type { EmergencyContact } from "@/types/health";
 
 export type BloodGroup = "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
+
+export type { EmergencyContact };
 
 export interface UserProfile {
   name: string;
@@ -23,6 +27,14 @@ export interface UserProfile {
   lastDonationDate?: string;
   // User-editable health notes (synced to backend)
   healthNotes?: string;
+  // Health identity — Phase 1
+  lifeline_id?: string;
+  abha_id?: string; // placeholder for future ABHA linking
+  allergies?: string[];
+  chronic_conditions?: string[];
+  preferred_language?: string;
+  profile_photo_url?: string;
+  emergency_contacts?: EmergencyContact[];
 }
 
 interface ProfileContextType {
@@ -53,7 +65,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem("lifeline_profile");
       if (stored) {
         try {
-          setProfileState({ ...DEFAULTS, ...JSON.parse(stored) });
+          const parsed = JSON.parse(stored);
+          // Generate LifeLine ID on first load if missing
+          if (!parsed.lifeline_id) {
+            parsed.lifeline_id = generateLifelineId();
+            localStorage.setItem("lifeline_profile", JSON.stringify(parsed));
+          }
+          setProfileState({ ...DEFAULTS, ...parsed });
         } catch { /* ignore corrupt data */ }
       }
       setIsLoading(false);
@@ -71,7 +89,11 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const setProfile = (newProfile: UserProfile) => {
-    const merged = { ...DEFAULTS, ...newProfile };
+    const merged: UserProfile = {
+      ...DEFAULTS,
+      ...newProfile,
+      lifeline_id: newProfile.lifeline_id ?? generateLifelineId(),
+    };
     setProfileState(merged);
     localStorage.setItem("lifeline_profile", JSON.stringify(merged));
   };
