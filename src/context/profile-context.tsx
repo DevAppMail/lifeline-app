@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { generateLifelineId } from "@/lib/lifeline-id";
@@ -44,6 +44,8 @@ interface ProfileContextType {
   updateProfile: (partial: Partial<UserProfile>) => void;
   clearProfile: () => Promise<void>;
   isLoading: boolean;
+  federatedToken: string | null;
+  bffFetch: (path: string, options?: RequestInit) => Promise<Response>;
 }
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
@@ -58,6 +60,35 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfileState] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [federatedToken, setFederatedToken] = useState<string | null>(() => localStorage.getItem("lifeline_federated_token"));
+
+  const callIdentityBridge = useCallback(async (supabaseToken: string, lifelineId?: string, name?: string) => {
+    try {
+      const res = await fetch("/api/app/identity/bridge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lifeline_id: lifelineId, name }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem("lifeline_federated_token", data.token);
+        setFederatedToken(data.token);
+      }
+    } catch {
+      // Bridge unreachable — carry on without federated token
+    }
+  }, []);
+
+  const bffFetch = useCallback(async (path: string, options?: RequestInit): Promise<Response> => {
+    const token = localStorage.getItem("lifeline_federated_token");
+    const headers: Record<string, string> = {
+      ...(options?.headers as Record<string, string>),
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    return fetch(path, { ...options, headers });
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -77,16 +108,33 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       if (event === "SIGNED_OUT") {
         setProfileState(null);
         localStorage.removeItem("lifeline_profile");
+        localStorage.removeItem("lifeline_federated_token");
+        setFederatedToken(null);
+      }
+      if ((event === "SIGNED_IN" || event === "TOKEN_REFRESHED") && session?.access_token) {
+        const stored = localStorage.getItem("lifeline_profile");
+        const p = stored ? JSON.parse(stored) as Partial<UserProfile> : {};
+        await callIdentityBridge(session.access_token, p.lifeline_id, p.name);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [callIdentityBridge]);
+
+  // Re-bridge on session change (initial load)
+  useEffect(() => {
+    if (session?.access_token && profile) {
+      const existing = localStorage.getItem("lifeline_federated_token");
+      if (!existing) {
+        callIdentityBridge(session.access_token, profile.lifeline_id, profile.name);
+      }
+    }
+  }, [session?.access_token, profile?.lifeline_id, callIdentityBridge]);
 
   const setProfile = (newProfile: UserProfile) => {
     const merged: UserProfile = {
@@ -121,6 +169,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       updateProfile,
       clearProfile,
       isLoading,
+      federatedToken,
+      bffFetch,
     }}>
       {children}
     </ProfileContext.Provider>

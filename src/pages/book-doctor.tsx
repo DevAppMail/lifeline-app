@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -44,6 +44,7 @@ type Doctor = {
   city: string | null; verification_status: string; rating: number | null;
   review_count: number | null; consultation_fee: number | null;
   available_days: string | null; available_start_time: string | null;
+  phone?: string;
 };
 
 function initials(name: string) {
@@ -153,7 +154,7 @@ function FavCard({ doc, onBook }: { doc: Doctor; onBook: () => void }) {
 
 export default function BookDoctor() {
   const [, setLocation] = useLocation();
-  const { profile } = useProfile();
+  const { profile, bffFetch } = useProfile();
   const [search, setSearch] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState<string | null>(null);
   const [doctors, setDoctors] = useState<Doctor[]>([]);
@@ -167,15 +168,15 @@ export default function BookDoctor() {
   // Load favourites
   useEffect(() => {
     if (!profile?.phone) return;
-    fetch(`/api/doctors/favourites?user_phone=${encodeURIComponent(profile.phone)}`)
+    bffFetch(`/api/app/doctors/favourites?user_phone=${encodeURIComponent(profile.phone)}`)
       .then(r => r.json()).then(data => { if (Array.isArray(data)) setFavourites(data); })
       .catch(() => {});
-  }, [profile?.phone]);
+  }, [profile?.phone, bffFetch]);
 
   // Load default doctors on mount — show 6, sorted nearest to user's city first
   useEffect(() => {
     setDefaultLoading(true);
-    fetch("/api/doctors?verification_status=verified")
+    bffFetch("/api/app/doctors?verification_status=verified")
       .then(r => r.json())
       .then(data => {
         if (!Array.isArray(data)) return;
@@ -187,7 +188,7 @@ export default function BookDoctor() {
       })
       .catch(() => {})
       .finally(() => setDefaultLoading(false));
-  }, [profile?.city]);
+  }, [profile?.city, bffFetch]);
 
   // Search/specialty filter
   useEffect(() => {
@@ -199,13 +200,13 @@ export default function BookDoctor() {
         const params = new URLSearchParams();
         if (search) params.set("search", search);
         if (selectedSpecialty) params.set("specialty", selectedSpecialty);
-        const res = await fetch(`/api/doctors?${params}`);
+        const res = await bffFetch(`/api/app/doctors?${params}`);
         const data = await res.json();
         setDoctors(Array.isArray(data) ? data : []);
       } catch { setDoctors([]); }
       setLoading(false);
     }, 300);
-  }, [search, selectedSpecialty]);
+  }, [search, selectedSpecialty, bffFetch]);
 
   const handleSpecialty = (s: string) => {
     setSelectedSpecialty(prev => prev === s ? null : s);

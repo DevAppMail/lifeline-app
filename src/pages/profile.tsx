@@ -12,6 +12,8 @@ import { useProfile, BloodGroup } from "@/context/profile-context";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { useContinuity } from "@/hooks/useContinuity";
+import { ContinuitySummary } from "@/components/continuity";
 
 const BLOOD_GROUPS: BloodGroup[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -114,7 +116,7 @@ function StarRow({ value, onChange }: { value: number; onChange: (v: number) => 
 
 export default function Profile() {
   const [, setLocation] = useLocation();
-  const { profile, updateProfile, clearProfile, isLoading } = useProfile();
+  const { profile, updateProfile, clearProfile, isLoading, bffFetch } = useProfile();
 
   const [editPersonal, setEditPersonal] = useState(false);
   const [editHealth, setEditHealth] = useState(false);
@@ -131,6 +133,9 @@ export default function Profile() {
   const [notifBlood, setNotifBlood] = useState(true);
   const [notifHealth, setNotifHealth] = useState(false);
   const [notifAppt, setNotifAppt] = useState(true);
+
+  // Continuity data
+  const { data: continuity, loading: continuityLoading } = useContinuity({ enabled: true });
 
   // Appointments state
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
@@ -153,14 +158,17 @@ export default function Profile() {
   const [ratingComment, setRatingComment] = useState("");
   const [ratingSubmitting, setRatingSubmitting] = useState(false);
 
-  const fetchAppointments = useCallback(async (phone: string) => {
+  const fetchAppointments = useCallback(async () => {
     setApptLoading(true);
     try {
-      const res = await fetch(`/api/appointments/by-phone?phone=${encodeURIComponent(phone)}`);
-      if (res.ok) setAppointments(await res.json());
+      const res = await bffFetch("/api/app/appointments");
+      if (res.ok) {
+        const data = await res.json();
+        setAppointments(Array.isArray(data) ? data as AppointmentRow[] : []);
+      }
     } catch {}
     setApptLoading(false);
-  }, []);
+  }, [bffFetch]);
 
   const fetchNotifications = useCallback(async (phone: string) => {
     try {
@@ -170,8 +178,8 @@ export default function Profile() {
   }, []);
 
   useEffect(() => {
+    fetchAppointments();
     if (profile?.phone) {
-      fetchAppointments(profile.phone);
       fetchNotifications(profile.phone);
     }
   }, [profile?.phone, fetchAppointments, fetchNotifications]);
@@ -203,11 +211,11 @@ export default function Profile() {
   const handleCancel = async (id: number) => {
     setCancellingId(id); setCancelError(null);
     try {
-      const res = await fetch(`/api/appointments/${id}/cancel`, {
+      const res = await bffFetch(`/api/app/appointments/${id}/cancel`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "Patient cancelled" }),
       });
       if (res.ok) {
-        if (profile.phone) await fetchAppointments(profile.phone);
+        await fetchAppointments();
       } else {
         const err = await res.json();
         setCancelError(err.error ?? "Could not cancel appointment.");
@@ -220,7 +228,7 @@ export default function Profile() {
     setAttendingId(id);
     try {
       const res = await fetch(`/api/appointments/${id}/attend`, { method: "PATCH" });
-      if (res.ok && profile.phone) await fetchAppointments(profile.phone);
+      if (res.ok) await fetchAppointments();
     } catch {}
     setAttendingId(null);
   };
@@ -234,7 +242,7 @@ export default function Profile() {
         body: JSON.stringify({ rating: ratingValue, comment: ratingComment }),
       });
       if (res.ok) {
-        if (profile.phone) await fetchAppointments(profile.phone);
+        await fetchAppointments();
         setRatingAppt(null); setRatingValue(0); setRatingComment("");
       }
     } catch {}
@@ -452,6 +460,17 @@ export default function Profile() {
             ))}
           </div>
         </Section>
+
+        {/* HEALTH CONTINUITY */}
+        {continuity && (continuity.appointments.length > 0 || continuity.consultations.length > 0) && (
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-3 px-1">
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Health Summary</p>
+              <a href="/health" className="text-xs font-semibold text-primary">Full timeline</a>
+            </div>
+            <ContinuitySummary continuity={continuity} loading={continuityLoading} />
+          </div>
+        )}
 
         {/* MY APPOINTMENTS */}
         <div>

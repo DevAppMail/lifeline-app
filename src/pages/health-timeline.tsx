@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -7,10 +7,11 @@ import {
   X, Check, Plus,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
+import { useContinuity } from "@/hooks/useContinuity";
 import {
   getTimeline, addTimelineEntry, removeTimelineEntry, generateId,
 } from "@/lib/health-store";
-import type { TimelineEntry, TimelineEntryType } from "@/types/health";
+import type { TimelineEntry, TimelineEntryType, EntryStatus } from "@/types/health";
 
 const TYPE_CONFIG: Record<TimelineEntryType, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
   donation:    { label: "Blood Donation",  icon: <Droplet className="w-4 h-4" />,       color: "text-primary",              bg: "bg-primary/10" },
@@ -58,16 +59,84 @@ function groupByDate(entries: TimelineEntry[]): { label: string; items: Timeline
 export default function HealthTimeline() {
   const [, setLocation] = useLocation();
   const { profile } = useProfile();
+  const { data: continuity, loading: continuityLoading } = useContinuity({ enabled: true });
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [addingNote, setAddingNote] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [viewMode, setViewMode] = useState<"unified" | "local">("unified");
 
   useEffect(() => {
     setEntries(getTimeline());
   }, []);
 
   const refresh = () => setEntries(getTimeline());
+
+  const mergedEntries = useMemo(() => {
+    if (viewMode === "local") return entries;
+    const continuityEntries: TimelineEntry[] = [];
+    if (continuity) {
+      for (const a of continuity.appointments) {
+        continuityEntries.push({
+          id: `c-apt-${a.id}`,
+          type: "appointment",
+          date: a.date,
+          title: a.doctorName,
+          subtitle: a.doctorSpecialty,
+          provider: a.clinicName,
+          location: a.time,
+          status: a.status as EntryStatus,
+          notes: a.reason,
+        });
+      }
+      for (const c of continuity.consultations) {
+        continuityEntries.push({
+          id: `c-con-${c.id}`,
+          type: "encounter",
+          date: c.date,
+          title: "Consultation",
+          subtitle: c.diagnosis,
+          provider: c.doctorName,
+          notes: c.notes,
+          status: "completed",
+        });
+      }
+      for (const p of continuity.prescriptions) {
+        continuityEntries.push({
+          id: `c-rx-${p.id}`,
+          type: "prescription",
+          date: p.date,
+          title: `Prescription (${p.items.length} medicines)`,
+          provider: p.doctorName,
+          status: "completed",
+          notes: p.items.map((m) => `${m.drugName} ${m.dosage}`).join(", "),
+        });
+      }
+      for (const f of continuity.followUps) {
+        continuityEntries.push({
+          id: `c-fup-${f.id}`,
+          type: "follow_up",
+          date: f.recommendedDate,
+          title: "Follow-Up",
+          subtitle: f.reason,
+          provider: f.doctorName,
+          status: f.status as EntryStatus,
+        });
+      }
+      for (const b of continuity.billing) {
+        continuityEntries.push({
+          id: `c-bil-${b.id}`,
+          type: "report",
+          date: b.date,
+          title: `Payment: ₹${b.fee.toLocaleString("en-IN")}`,
+          subtitle: b.status === "completed" ? "Paid" : `₹${b.pendingAmount.toLocaleString("en-IN")} pending`,
+          status: b.status === "completed" ? "completed" : "pending",
+        });
+      }
+    }
+    const merged = [...entries, ...continuityEntries];
+    return merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [entries, continuity, viewMode]);
 
   const handleAddNote = () => {
     if (!noteText.trim()) return;
@@ -88,9 +157,11 @@ export default function HealthTimeline() {
     refresh();
   };
 
+  const visible = viewMode === "local" ? entries : mergedEntries;
+  const showContinuityLoading = viewMode === "unified" && continuityLoading && entries.length > 0;
   const filtered = filter === "all"
-    ? entries
-    : entries.filter(e => e.type === filter || (filter === "appointment" && (e.type === "appointment" || e.type === "follow_up" || e.type === "home_visit")));
+    ? visible
+    : visible.filter(e => e.type === filter || (filter === "appointment" && (e.type === "appointment" || e.type === "follow_up" || e.type === "home_visit")));
 
   const grouped = groupByDate(filtered);
 
@@ -111,8 +182,8 @@ export default function HealthTimeline() {
         </div>
       </div>
 
-      {/* Filter chips */}
-      <div className="flex gap-2 px-5 py-3 overflow-x-auto border-b border-border">
+      {/* Filter + view mode */}
+      <div className="flex items-center gap-2 px-5 py-3 overflow-x-auto border-b border-border">
         {FILTERS.map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)}
             className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-colors ${
@@ -123,7 +194,24 @@ export default function HealthTimeline() {
             {f.label}
           </button>
         ))}
+        {continuity && (
+          <button onClick={() => setViewMode(v => v === "unified" ? "local" : "unified")}
+            className={`flex-shrink-0 ml-auto px-3 py-1.5 rounded-full text-[10px] font-semibold border transition-colors ${
+              viewMode === "unified"
+                ? "bg-primary/10 text-primary border-primary/30"
+                : "bg-muted/40 text-muted-foreground border-border/60"
+            }`}>
+            {viewMode === "unified" ? "Connected" : "Local only"}
+          </button>
+        )}
       </div>
+
+      {showContinuityLoading && (
+        <div className="flex items-center justify-center gap-2 py-2 px-5 border-b border-border">
+          <div className="w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          <span className="text-xs text-muted-foreground">Loading health data…</span>
+        </div>
+      )}
 
       <div className="flex-1 overflow-y-auto px-5 pt-4 pb-4">
 

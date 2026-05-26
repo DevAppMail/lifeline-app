@@ -149,7 +149,7 @@ export default function Login() {
     setInputError("");
   };
 
-  const handleDevLogin = () => {
+  const handleDevLogin = async () => {
     localStorage.setItem("DEV_BYPASS", "true");
     localStorage.setItem("lifeline_profile", JSON.stringify({
       phone: "919000000000",
@@ -165,6 +165,17 @@ export default function Login() {
       hasHealthIssues: false,
       lastDonationDate: "2026-02-10T00:00:00.000Z",
     }));
+    try {
+      const res = await fetch("/api/app/identity/dev-bridge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "Devraj (Test)" }),
+      });
+      if (res.ok) {
+        const { token } = await res.json() as { token: string };
+        localStorage.setItem("lifeline_federated_token", token);
+      }
+    } catch { /* dev-bridge unavailable — carry on without federated token */ }
     window.location.href = "/home";
   };
 

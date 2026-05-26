@@ -5,10 +5,13 @@ import {
   Droplet, Heart, Activity, User, MapPin,
   Stethoscope, HeartPulse, ChevronLeft, ChevronRight,
   Building2, Flame, Star, Trophy, Sparkles, TrendingUp, ArrowRight, Calendar,
-  X, ExternalLink,
+  X, ExternalLink, Bell, BellRing,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import { getSeenIds } from "@/lib/commitments";
+import { useContinuity } from "@/hooks/useContinuity";
+import { useReminders } from "@/hooks/useReminders";
+import { ContinuitySummary, ContinuityTimeline } from "@/components/continuity";
 
 // ── Ad Types ──────────────────────────────────────────────────────────────────
 
@@ -524,6 +527,8 @@ export default function Home() {
   };
 
   const requestsBadge = useRequestsBadge(profile?.bloodGroup ?? "");
+  const { data: continuity, loading: continuityLoading } = useContinuity({ enabled: true });
+  const { unreadCount: reminderCount } = useReminders(continuity);
 
   if (isLoading || !profile) return null;
 
@@ -561,6 +566,16 @@ export default function Home() {
               {badge.icon}
               {badge.label}
             </div>
+            <a href="/notifications" className="relative mt-1 flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors">
+                {reminderCount > 0 ? <BellRing className="w-5 h-5 text-white" /> : <Bell className="w-5 h-5 text-white/70" />}
+              </div>
+              {reminderCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center px-1 border-2 border-primary">
+                  {reminderCount > 9 ? "9+" : reminderCount}
+                </span>
+              )}
+            </a>
           </div>
 
           {/* Stats strip — always visible */}
@@ -736,6 +751,44 @@ export default function Home() {
               })}
             </div>
           </section>
+
+          {/* ── HEALTH CONTINUITY ── */}
+          {continuity && (continuity.appointments.length > 0 || continuity.consultations.length > 0) && (
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-base font-bold text-foreground">My Health</h2>
+                <a href="/health" className="text-xs font-semibold text-primary">Full timeline</a>
+              </div>
+              <ContinuitySummary continuity={continuity} loading={continuityLoading} />
+              <div className="mt-3">
+                <ContinuityTimeline continuity={continuity} loading={continuityLoading} compact initialLimit={3} />
+              </div>
+            </section>
+          )}
+
+          {/* ── REMINDER PREVIEW ── */}
+          {reminderCount > 0 && (
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-foreground">Reminders</h2>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-white">{reminderCount}</span>
+                </div>
+                <a href="/notifications" className="text-xs font-semibold text-primary">View all</a>
+              </div>
+              <a href="/notifications" className="block bg-card border border-border rounded-2xl p-3.5 hover:bg-muted/30 transition-colors">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                    <BellRing className="w-5 h-5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-foreground">{reminderCount} active reminder{reminderCount !== 1 ? "s" : ""}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Tap to view in notification center</p>
+                  </div>
+                </div>
+              </a>
+            </section>
+          )}
 
           {/* ── ACTIVITY FEED ── */}
           <ActivityFeed profile={profile} />

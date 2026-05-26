@@ -11,6 +11,7 @@ type Doctor = {
   id: number; name: string; specialty: string; clinic_name: string | null;
   city: string | null; consultation_fee: number | null; available_days: string | null;
   available_start_time: string | null; available_end_time: string | null;
+  phone?: string;
 };
 
 function generateBookingId(): string {
@@ -56,7 +57,7 @@ const DEPOSIT_AMOUNT = 49;
 export default function BookAppointment() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/book-appointment/:doctorId");
-  const { profile } = useProfile();
+  const { profile, bffFetch } = useProfile();
   const doctorId = Number(params?.doctorId);
 
   const [step, setStep] = useState(1);
@@ -81,25 +82,25 @@ export default function BookAppointment() {
 
   useEffect(() => {
     if (isNaN(doctorId)) return;
-    fetch(`/api/doctors/${doctorId}`)
+    bffFetch(`/api/app/doctors/${doctorId}`)
       .then(r => r.json()).then(d => { setDoc(d); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [doctorId]);
+  }, [doctorId, bffFetch]);
 
   useEffect(() => {
     if (!profile?.phone) return;
-    fetch(`/api/appointments/no-show-count?phone=${encodeURIComponent(profile.phone)}`)
+    bffFetch(`/api/app/appointments/no-show-count`)
       .then(r => r.json()).then(d => { if (typeof d.count === "number") setNoShowCount(d.count); })
       .catch(() => {});
-  }, [profile?.phone]);
+  }, [profile?.phone, bffFetch]);
 
   useEffect(() => {
     if (!selectedDay || !doc) return;
     setSlotsLoading(true);
-    fetch(`/api/doctors/${doc.id}/booked-slots?date=${selectedDay}`)
+    bffFetch(`/api/app/doctors/${doc.id}/booked-slots?date=${selectedDay}`)
       .then(r => r.json()).then(d => { if (Array.isArray(d)) setBookedSlots(d); setSlotsLoading(false); })
       .catch(() => setSlotsLoading(false));
-  }, [selectedDay, doc]);
+  }, [selectedDay, doc, bffFetch]);
 
   const slots = doc?.available_start_time && doc?.available_end_time
     ? generateSlots(doc.available_start_time, doc.available_end_time)
@@ -116,13 +117,14 @@ export default function BookAppointment() {
     setSubmitting(true);
     const bookingId = generateBookingId();
     try {
-      const res = await fetch("/api/appointments", {
+      const res = await bffFetch("/api/app/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          patient_id: 1,
           patient_phone: profile.phone || null,
           doctor_id: doc.id,
+          doctor_name: doc.name,
+          doctor_phone: doc.phone || null,
           appointment_date: selectedDay,
           appointment_time: selectedSlot,
           for_self: forSelf,
@@ -130,7 +132,6 @@ export default function BookAppointment() {
           relation: !forSelf ? relation : null,
           reason: reason || null,
           allergies: allergies || null,
-          booking_id: bookingId,
           fee: doc.consultation_fee,
           deposit_held: requiresDeposit,
           deposit_amount: requiresDeposit ? DEPOSIT_AMOUNT : null,

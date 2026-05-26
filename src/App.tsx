@@ -54,6 +54,7 @@ import CareCircle from "@/pages/care-circle";
 import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
 import AuthCallback from "@/pages/auth-callback";
+import NotificationsPage from "@/pages/notifications";
 
 const queryClient = new QueryClient();
 
@@ -100,6 +101,7 @@ function Router() {
       <Route path="/events" component={Events} />
       <Route path="/events/:id" component={EventDetail} />
       <Route path="/auth/callback" component={AuthCallback} />
+      <Route path="/notifications" component={NotificationsPage} />
       <Route component={NotFound} />
     </Switch>
   );
