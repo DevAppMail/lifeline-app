@@ -14,7 +14,7 @@ export type ReminderCategory =
 
 export type ReminderPriority = "high" | "medium" | "low";
 
-export type ReminderStatus = "pending" | "shown" | "read" | "dismissed" | "snoozed" | "completed";
+export type ReminderStatus = "pending" | "shown" | "read" | "dismissed" | "snoozed" | "completed" | "taken" | "skipped";
 
 export type ReminderEntityType = "appointment" | "consultation" | "prescription" | "follow_up" | "billing";
 
@@ -53,4 +53,6 @@ export type ReminderAction =
   | { type: "dismiss"; id: string }
   | { type: "snooze"; id: string; until: string }
   | { type: "rebook"; id: string }
-  | { type: "mark_all_read" };
+  | { type: "mark_all_read" }
+  | { type: "taken"; id: string; scheduleId: string }
+  | { type: "skip"; id: string; scheduleId: string };

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
-import { Droplet, Clock, AlertTriangle } from "lucide-react";
+import { Droplet, Clock, Heart } from "lucide-react";
 import { getCommitments } from "@/lib/commitments";
 import type { Commitment } from "@/lib/commitments";
 
@@ -38,29 +38,35 @@ export function CommitmentStrip() {
     <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
       className={`mx-4 mt-3 rounded-2xl p-3 border ${
         isUrgent
-          ? "bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/40"
+          ? "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-800/40"
           : "bg-primary/5 border-primary/20"
       }`}>
       <Link href="/donate" className="flex items-start gap-3">
         <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${
-          isUrgent ? "bg-red-100 dark:bg-red-900/30" : "bg-primary/10"
+          isUrgent ? "bg-rose-100 dark:bg-rose-900/30" : "bg-primary/10"
         }`}>
-          {isUrgent
-            ? <AlertTriangle className="w-4.5 h-4.5 text-red-600 dark:text-red-400" style={{ width: 18, height: 18 }} />
-            : <Droplet className="w-4.5 h-4.5 text-primary" style={{ width: 18, height: 18 }} />
-          }
+          <Heart className={`w-4.5 h-4.5 ${isUrgent ? "text-rose-600 dark:text-rose-400" : "text-primary"}`} style={{ width: 18, height: 18 }} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-bold text-foreground">Blood donation commitment</p>
+          <p className="text-xs font-bold text-foreground">
+            {isUrgent ? "Someone needs you today" : "You committed to help someone"}
+          </p>
           <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-            {active.hospitalName}{active.hospitalLocation ? ` · ${active.hospitalLocation}` : ""} {remaining ? ` · ${remaining}` : ""}
+            {active.patientFirstName ? `${active.patientFirstName} · ` : ""}
+            {active.hospitalName}{active.hospitalLocation ? `, ${active.hospitalLocation}` : ""}
           </p>
         </div>
         <div className={`text-xs font-bold flex items-center gap-1 flex-shrink-0 ${
-          isUrgent ? "text-red-600 dark:text-red-400" : "text-primary"
+          isUrgent ? "text-rose-600 dark:text-rose-400" : "text-primary"
         }`}>
-          <Clock className="w-3 h-3" />
-          {remaining}
+          {isUrgent ? (
+            <span className="flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {remaining}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1">{remaining}</span>
+          )}
         </div>
       </Link>
     </motion.div>

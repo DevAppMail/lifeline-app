@@ -7,6 +7,7 @@ import { type BloodGroup, type RequestTier } from "@/types/fulfillment";
 import { recordDonationResult } from "@/lib/donor-state";
 import { recordDonorResponse } from "@/lib/request-store";
 import { transitionAssignmentState, createAssignment } from "@/lib/donor-linking";
+import { addTimelineEntry, generateId } from "@/lib/health-store";
 
 export interface Commitment {
   requestId: string;
@@ -19,10 +20,12 @@ export interface Commitment {
   requiredTime: string;
   tier?: RequestTier;
   committedAt: string;
-  status: "committed" | "awaiting_confirmation" | "completed" | "missed";
+  checkedInAt?: string;
+  status: "committed" | "checked_in" | "awaiting_confirmation" | "completed" | "missed";
   confirmationId?: number;
   requesterUserId?: number;
   donorId?: string;
+  phone?: string;
 }
 
 const KEY = "lifeline_commitments";
@@ -66,7 +69,7 @@ export function addCommitment(c: Commitment): void {
         createAssignment({
           request_id: c.requestId,
           donor_id: c.donorId,
-          donor_phone: c.donorId,
+          donor_phone: c.phone ?? c.donorId,
           donor_name: c.patientFirstName,
           blood_group: c.bloodGroup as BloodGroup,
         });
@@ -82,25 +85,44 @@ export function updateCommitmentStatus(
 ): void {
   const list = getCommitments().map((c) =>
     (c.requestId === requestId || c.lifelineId === requestId)
-      ? { ...c, status, ...(extra ?? {}) }
+      ? { ...c, status, ...(extra ?? {}), ...(status === "checked_in" ? { checkedInAt: new Date().toISOString() } : {}) }
       : c
   );
   localStorage.setItem(KEY, JSON.stringify(list));
 
-  // Track in donor state for reliability scoring
+  // Track in donor state for reliability scoring with reason
+  const c = list.find((cm) => cm.requestId === requestId || cm.lifelineId === requestId);
   if (status === "completed") {
-    recordDonationResult(true);
+    recordDonationResult(true, "completed", requestId);
+
+    // Add to health timeline (Section 4 — continuity integration)
+    if (c) {
+      try {
+        addTimelineEntry({
+          id: generateId(),
+          type: "donation",
+          date: new Date().toISOString(),
+          title: `Blood donation completed`,
+          subtitle: c.patientFirstName ? `For ${c.patientFirstName}` : undefined,
+          provider: c.hospitalName,
+          location: c.hospitalLocation,
+          status: "completed",
+          notes: `Request: ${c.requestId}`,
+        });
+      } catch { /* silent */ }
+    }
   } else if (status === "missed") {
-    recordDonationResult(false);
+    recordDonationResult(false, "missed", requestId);
   }
 
-  // Sprint 2: sync to donor linking
+  // Sprint 2: sync to donor linking with proper state machine
   const commitment = list.find((c) => c.requestId === requestId || c.lifelineId === requestId);
   if (commitment?.donorId) {
     try {
       const mappedState = status === "completed" ? "confirmed"
         : status === "missed" ? "no_show"
         : status === "awaiting_confirmation" ? "donated"
+        : status === "checked_in" ? "checked_in"
         : "committed";
       transitionAssignmentState(requestId, commitment.donorId, mappedState);
     } catch { /* silent */ }

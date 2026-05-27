@@ -150,7 +150,7 @@ export default function Login() {
   };
 
   const handleDevLogin = async () => {
-    localStorage.setItem("DEV_BYPASS", "true");
+    localStorage.setItem("lifeline_dev_bypass", "true");
     localStorage.setItem("lifeline_profile", JSON.stringify({
       phone: "919000000000",
       bloodGroup: "B+",

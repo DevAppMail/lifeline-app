@@ -655,7 +655,7 @@ export default function Donate() {
         <Link href="/home" className="flex flex-col items-center gap-1 text-muted-foreground"><Heart className="w-5 h-5" /><span className="text-[10px] font-medium">Home</span></Link>
         <button className="flex flex-col items-center gap-1 text-primary"><Droplet className="w-5 h-5 fill-primary/40" /><span className="text-[10px] font-semibold">Donate</span></button>
         <Link href="/requests" className="flex flex-col items-center gap-1 text-muted-foreground"><Activity className="w-5 h-5" /><span className="text-[10px] font-medium">Requests</span></Link>
-        <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground"><Bell className="w-5 h-5" /><span className="text-[10px] font-medium">Alerts</span></Link>
+        <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground"><Bell className="w-5 h-5" /><span className="text-[10px] font-medium">Notifications</span></Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground"><User className="w-5 h-5" /><span className="text-[10px] font-medium">Profile</span></Link>
       </nav>
       <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />

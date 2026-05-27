@@ -6,9 +6,11 @@ import {
   Heart, Droplet, Activity, User, MapPin, Briefcase, Bell,
   ShieldCheck, Trophy, Flame, Users, ChevronRight,
   CalendarDays, Clock, Star, AlertTriangle, RotateCcw,
-  CheckCircle2, XCircle, AlertCircle, Stethoscope, ChevronDown, ChevronUp,
+  CheckCircle2, XCircle, AlertCircle, Stethoscope, ChevronDown, ChevronUp, Camera,
 } from "lucide-react";
 import { useProfile, BloodGroup } from "@/context/profile-context";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { useProfilePhoto } from "@/hooks/useProfilePhoto";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -134,6 +136,8 @@ export default function Profile() {
   const [notifBlood, setNotifBlood] = useState(true);
   const [notifHealth, setNotifHealth] = useState(false);
   const [notifAppt, setNotifAppt] = useState(true);
+
+  const profilePhoto = useProfilePhoto();
 
   // Continuity data
   const { data: continuity, loading: continuityLoading } = useContinuity({ enabled: true });
@@ -290,8 +294,31 @@ export default function Profile() {
           <div className="absolute -top-6 -right-6 w-32 h-32 bg-white/5 rounded-full" />
           <div className="absolute top-8 right-8 w-16 h-16 bg-white/5 rounded-full" />
           <div className="relative z-10 flex items-center gap-4">
-            <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center border border-white/30">
-              <User className="w-8 h-8 text-white" />
+            <div className="relative flex-shrink-0">
+              <input ref={profilePhoto.inputRef} type="file" accept="image/*" className="hidden" onChange={profilePhoto.onChange} />
+              <button onClick={profilePhoto.triggerUpload} className="block focus:outline-none group">
+                <Avatar className="w-16 h-16 rounded-2xl border-2 border-white/30">
+                  {profilePhoto.hasPhoto ? (
+                    <AvatarImage src={profilePhoto.photoUrl!} alt={profile.name} className="object-cover" />
+                  ) : null}
+                  <AvatarFallback className="rounded-2xl bg-white/10">
+                    {profilePhoto.uploading ? (
+                      <div className="w-5 h-5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    ) : (
+                      <User className="w-8 h-8 text-white/70" />
+                    )}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="absolute inset-0 rounded-2xl bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                  <Camera className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+              </button>
+              {profilePhoto.hasPhoto && (
+                <button onClick={profilePhoto.removePhoto}
+                  className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center border-2 border-primary">
+                  <X className="w-3 h-3 text-white" />
+                </button>
+              )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -671,7 +698,7 @@ export default function Profile() {
         {/* NOTIFICATION SETTINGS */}
         <Section title="Notifications">
           {[
-            { label: "Blood Request Alerts", sub: "Nearby requests matching your group", value: notifBlood, set: setNotifBlood },
+            { label: "Blood Request Notifications", sub: "Nearby requests matching your group", value: notifBlood, set: setNotifBlood },
             { label: "Health Tips", sub: "Weekly health & donation reminders", value: notifHealth, set: setNotifHealth },
             { label: "Appointment Reminders", sub: "Upcoming doctor appointments", value: notifAppt, set: setNotifAppt },
           ].map((item, i, arr) => (
@@ -730,7 +757,7 @@ export default function Profile() {
         </button>
         <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground">
           <Bell className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Alerts</span>
+          <span className="text-[10px] font-medium">Notifications</span>
         </Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-primary">
           <User className="w-5 h-5 fill-primary/30" />

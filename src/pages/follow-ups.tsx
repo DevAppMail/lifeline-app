@@ -5,7 +5,7 @@ import {
   ChevronLeft, Heart, Droplet, Activity, User,
   Bell, CheckCircle2, XCircle, CalendarClock, Home, Stethoscope,
   Video, Clock, AlertTriangle, RotateCcw, Plus, X, Check,
-  RefreshCw,
+  RefreshCw, AlertCircle, Info,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import {
@@ -13,6 +13,7 @@ import {
   addTimelineEntry, getProviders, generateId,
 } from "@/lib/health-store";
 import { respondToFollowUp } from "@/lib/continuity-utils";
+import { getFollowUpCompletionInsights } from "@/lib/continuity-intelligence";
 import type { FollowUpRequest, VisitType, FollowUpUrgency } from "@/types/health";
 
 const VISIT_CONFIG: Record<VisitType, { label: string; icon: React.ReactNode; color: string }> = {
@@ -26,6 +27,21 @@ const URGENCY_CONFIG: Record<FollowUpUrgency, { label: string; color: string; do
   soon:    { label: "Soon",     color: "text-amber-600 dark:text-amber-400",       dot: "bg-amber-500" },
   urgent:  { label: "Urgent",   color: "text-red-600 dark:text-red-400",           dot: "bg-red-500" },
 };
+
+function getFollowUpPurpose(reason: string): string {
+  const lower = reason.toLowerCase();
+  if (lower.includes("bp") || lower.includes("blood pressure")) return "Regular monitoring helps you and your provider track your blood pressure over time.";
+  if (lower.includes("sugar") || lower.includes("diabetes") || lower.includes("diabetic")) return "Consistent follow-ups help manage blood sugar levels and adjust medication if needed.";
+  if (lower.includes("thyroid")) return "Follow-up ensures your thyroid medication dosage is still appropriate.";
+  if (lower.includes("heart") || lower.includes("cardiac")) return "Cardiac follow-ups help track recovery and prevent complications.";
+  if (lower.includes("lab") || lower.includes("test") || lower.includes("report")) return "Reviewing results with your provider ensures your care plan stays on track.";
+  if (lower.includes("pain")) return "Ongoing pain management follow-ups help optimize your treatment approach.";
+  if (lower.includes("therapy") || lower.includes("physio") || lower.includes("rehab")) return "Consistent sessions support steady improvement in mobility and function.";
+  if (lower.includes("check") || lower.includes("review") || lower.includes("follow")) return "Regular check-ups help your provider track your health over time.";
+  if (lower.includes("wound") || lower.includes("dressing")) return "Regular wound checks are important for proper healing and preventing infection.";
+  if (lower.includes("vaccine") || lower.includes("vaccination")) return "Staying up to date with vaccinations protects your long-term health.";
+  return "This follow-up helps your provider ensure your treatment is working as expected.";
+}
 
 type Tab = "pending" | "upcoming" | "past";
 
@@ -327,6 +343,9 @@ export default function FollowUps() {
                             {fu.recommended_time_window && <span>· {fu.recommended_time_window}</span>}
                           </div>
                         )}
+                        <p className="text-xs text-muted-foreground/70 mt-1.5 leading-relaxed">
+                          {getFollowUpPurpose(fu.reason)}
+                        </p>
                         {fu.notes && <p className="text-xs text-muted-foreground mt-1 italic">"{fu.notes}"</p>}
                       </div>
                     </div>
@@ -388,24 +407,43 @@ export default function FollowUps() {
             <div className="space-y-3">
               {upcoming.map((fu, i) => {
                 const visit = VISIT_CONFIG[fu.visit_type];
+                const isOverdue = fu.recommended_date && new Date(fu.recommended_date) < new Date();
+                const daysUntil = fu.recommended_date ? Math.round((new Date(fu.recommended_date).getTime() - Date.now()) / 86400000) : null;
                 return (
                   <motion.div key={fu.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className="bg-card border border-border rounded-2xl p-4">
+                    className={`bg-card border rounded-2xl p-4 ${isOverdue ? "border-red-200 dark:border-red-800/30" : "border-border"}`}>
                     <div className="flex items-start gap-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${visit.color.includes("blue") ? "bg-blue-100 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400" : visit.color.includes("emerald") ? "bg-emerald-100 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400" : "bg-purple-100 dark:bg-purple-950/30 text-purple-600 dark:text-purple-400"}`}>
                         {visit.icon}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground">{fu.provider_name}</p>
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-sm font-bold text-foreground">{fu.provider_name}</p>
+                          {isOverdue && (
+                            <span className="flex-shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                              Overdue
+                            </span>
+                          )}
+                        </div>
                         <p className="text-sm text-foreground mt-0.5">{fu.reason}</p>
+                        {isOverdue && (
+                          <p className="text-xs text-muted-foreground/70 mt-1 leading-relaxed">
+                            {getFollowUpPurpose(fu.reason)}
+                          </p>
+                        )}
                         <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                           <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${visit.color}`}>
                             {visit.label}
                           </span>
                           {fu.recommended_date && (
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <span className={`text-xs flex items-center gap-1 ${isOverdue ? "text-rose-600 dark:text-rose-400 font-semibold" : "text-muted-foreground"}`}>
                               <Clock className="w-3 h-3" />
-                              {new Date(fu.recommended_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                              {isOverdue
+                                ? `Due ${new Date(fu.recommended_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}`
+                                : new Date(fu.recommended_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                              {daysUntil !== null && daysUntil <= 3 && daysUntil >= 0 && (
+                                <span className="text-amber-600 dark:text-amber-400 font-semibold">· {daysUntil === 0 ? "Today" : daysUntil === 1 ? "Tomorrow" : `${daysUntil}d`}</span>
+                              )}
                             </span>
                           )}
                           {fu.is_recurring && fu.total_sessions && (
@@ -424,8 +462,7 @@ export default function FollowUps() {
                 );
               })}
             </div>
-          )
-        )}
+          ))}
 
         {/* History Tab */}
         {tab === "past" && (

@@ -2,7 +2,7 @@
 // Persistable localStorage configurations for repeated testing sessions.
 // Run `setupDonorActor()` or `setupRequesterActor()` from browser console.
 
-const DEV_BYPASS_KEY = "DEV_BYPASS";
+const DEV_BYPASS_KEY = "lifeline_dev_bypass";
 const PROFILE_KEY = "lifeline_profile";
 const AVAIL_KEY = "lifeline_donor_availability";
 const STATE_KEY = "lifeline_donor_operational_state";
@@ -29,7 +29,7 @@ function persistActor(
   localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   localStorage.setItem(AVAIL_KEY, JSON.stringify(availability));
   localStorage.setItem(STATE_KEY, JSON.stringify(operational));
-  console.log(`[TestActor] Setup complete for ${profile.name}`);
+  if (import.meta.env.DEV) console.log(`[TestActor] Setup complete for ${profile.name}`);
 }
 
 // ── Donor Actor ────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ export function resetAllTestState(): void {
     "lifeline_health_timeline", "lifeline_care_circle",
   ];
   keys.forEach((k) => localStorage.removeItem(k));
-  console.log("[TestActor] All test state reset");
+  if (import.meta.env.DEV) console.log("[TestActor] All test state reset");
 }
 
 // Expose globally for console use

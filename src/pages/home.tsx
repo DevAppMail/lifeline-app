@@ -13,6 +13,7 @@ import { useContinuity } from "@/hooks/useContinuity";
 import { useReminders } from "@/hooks/useReminders";
 import { CommitmentStrip } from "@/components/commitment-strip";
 import { ContinuitySummary, ContinuityTimeline } from "@/components/continuity";
+import { CareInsightsWidget, ProviderContinuitySummary } from "@/components/care-insights";
 
 // ── Ad Types ──────────────────────────────────────────────────────────────────
 
@@ -769,12 +770,18 @@ export default function Home() {
             </section>
           )}
 
+          {/* ── CARE INSIGHTS ── */}
+          <CareInsightsWidget limit={2} />
+
+          {/* ── MY CARE TEAM ── */}
+          <ProviderContinuitySummary />
+
           {/* ── REMINDER PREVIEW ── */}
           {reminderCount > 0 && (
             <section>
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
-                  <h2 className="text-base font-bold text-foreground">Reminders</h2>
+                  <h2 className="text-base font-bold text-foreground">Notifications</h2>
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary text-white">{reminderCount}</span>
                 </div>
                 <a href="/notifications" className="text-xs font-semibold text-primary">View all</a>
@@ -823,7 +830,7 @@ export default function Home() {
           {reminderCount > 0 && (
             <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">{reminderCount > 99 ? "99+" : reminderCount}</span>
           )}
-          <span className="text-[10px] font-medium">Alerts</span>
+          <span className="text-[10px] font-medium">Notifications</span>
         </Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground">
           <User className="w-5 h-5" />

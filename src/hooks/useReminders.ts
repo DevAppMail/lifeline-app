@@ -5,8 +5,10 @@ import {
   markAllRemindersRead,
   updateReminderStatus,
   clearExpiredReminders,
+  addReminders,
 } from "@/lib/reminder-store";
 import { computeAndStoreReminders, sortReminders, groupRemindersByDate, getActiveReminders } from "@/lib/reminder-utils";
+import { getDueMedicationReminders } from "@/lib/medication-store";
 import type { PatientContinuity } from "@/types/continuity";
 
 interface UseRemindersResult {
@@ -22,11 +24,16 @@ export function useReminders(continuity: PatientContinuity | null): UseReminders
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!continuity) return;
     setLoading(true);
     const id = setTimeout(() => {
       clearExpiredReminders();
-      computeAndStoreReminders(continuity);
+      if (continuity) {
+        computeAndStoreReminders(continuity);
+      }
+      const medReminders = getDueMedicationReminders();
+      if (medReminders.length > 0) {
+        addReminders(medReminders);
+      }
       setVersion(v => v + 1);
       setLoading(false);
     }, 200);

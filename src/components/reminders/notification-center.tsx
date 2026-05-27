@@ -5,6 +5,8 @@ import {
 } from "lucide-react";
 import type { ReminderAction, ReminderEvent } from "@/types/reminder";
 import { ReminderCard } from "./reminder-card";
+import { updateMedicationStatus } from "@/lib/medication-store";
+import { MedicationManager } from "@/components/medication-manager";
 
 interface NotificationCenterProps {
   reminders: { label: string; items: ReminderEvent[] }[];
@@ -27,6 +29,15 @@ export function NotificationCenter({ reminders, unreadCount, dispatch, loading }
       setLocation("/book-doctor");
       return;
     }
+    if (action.type === "taken") {
+      updateMedicationStatus(action.scheduleId, "completed");
+      dispatch({ type: "mark_read", id: action.id });
+      return;
+    }
+    if (action.type === "skip") {
+      dispatch({ type: "mark_read", id: action.id });
+      return;
+    }
     dispatch(action);
   };
 
@@ -47,7 +58,7 @@ export function NotificationCenter({ reminders, unreadCount, dispatch, loading }
               </span>
             )}
           </div>
-          <p className="text-sm text-muted-foreground">Continuity reminders & alerts</p>
+          <p className="text-sm text-muted-foreground">Everything that needs your attention</p>
         </div>
         {unreadCount > 0 && (
           <button onClick={() => dispatch({ type: "mark_all_read" })}
@@ -97,6 +108,9 @@ export function NotificationCenter({ reminders, unreadCount, dispatch, loading }
                 </div>
               </div>
             ))}
+            <div className="pt-4 border-t border-border">
+              <MedicationManager />
+            </div>
           </div>
         )}
       </div>

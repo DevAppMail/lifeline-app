@@ -380,6 +380,7 @@ export interface DonorAssignment {
   notified_at?: string;
   responded_at?: string;
   committed_at?: string;
+  checked_in_at?: string;
   donated_at?: string;
   confirmed_at?: string;
   response_latency_seconds?: number;
@@ -450,6 +451,7 @@ export type AuditAction =
   | "donor.no_show"
   | "donor.cancelled"
   | "donor.replaced"
+  | "donor.duplicate_prevented"
   | "escalation.triggered"
   | "escalation.cancelled"
   | "radius.expanded"

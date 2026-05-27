@@ -43,6 +43,21 @@ export function createAssignment(params: {
   stage_at_assignment?: EscalationStage;
   notes?: string;
 }): DonorAssignment {
+  const existing = readAssignments().find(
+    (a) => a.request_id === params.request_id && a.donor_id === params.donor_id
+  );
+  if (existing) {
+    writeAuditEntry({
+      action: "donor.duplicate_prevented",
+      actor_type: "system",
+      request_id: params.request_id,
+      donor_id: params.donor_id,
+      details: "Duplicate assignment blocked",
+      severity: "info",
+    });
+    return existing;
+  }
+
   const ops = getDonorOperationalData();
 
   const assignment: DonorAssignment = {
@@ -124,6 +139,7 @@ export function transitionAssignmentState(
     }
   }
   if (newState === "committed") timestamps.committed_at = now;
+  if (newState === "checked_in") timestamps.checked_in_at = now;
   if (newState === "donated") timestamps.donated_at = now;
   if (newState === "confirmed") timestamps.confirmed_at = now;
 

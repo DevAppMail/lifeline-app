@@ -14,7 +14,7 @@ const TABS: NavTab[] = [
   { href: "/home", label: "Home", icon: Heart },
   { href: "/donate", label: "Donate", icon: Droplet },
   { href: "/requests", label: "Requests", icon: Activity, badgeKey: "requests" },
-  { href: "/notifications", label: "Alerts", icon: Bell, badgeKey: "notifications" },
+  { href: "/notifications", label: "Notifications", icon: Bell, badgeKey: "notifications" },
   { href: "/profile", label: "Profile", icon: User },
 ];
 
