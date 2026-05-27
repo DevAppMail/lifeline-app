@@ -85,6 +85,7 @@ export function findMatchingDonors(
 
     // Availability mode
     if (cfg.require_availability && !isDonorAvailableForTier(cfg.tier, {
+      active: donor.availability_toggle,
       mode: donor.availability_mode as any,
       weekly_schedule: {
         monday: [], tuesday: [], wednesday: [], thursday: [], friday: [], saturday: [], sunday: [],

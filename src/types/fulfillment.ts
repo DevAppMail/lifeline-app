@@ -112,10 +112,13 @@ export function defaultWeeklySchedule(): WeeklySchedule {
 }
 
 export interface DonorAvailability {
+  active: boolean;
   mode: DonorAvailabilityMode;
   weekly_schedule: WeeklySchedule;
+  days_of_week?: number[];
+  time_windows?: TimeRange[];
   temporarily_unavailable: boolean;
-  unavailable_until?: string; // ISO date
+  unavailable_until?: string;
   unavailable_reason?: string;
   max_travel_radius_km: number;
   preferred_time_of_day: "morning" | "afternoon" | "evening" | "night" | "flexible";

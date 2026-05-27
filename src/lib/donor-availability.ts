@@ -17,6 +17,7 @@ const STORE_KEY = "lifeline_donor_availability";
 
 export function defaultAvailability(): DonorAvailability {
   return {
+    active: true,
     mode: "always",
     weekly_schedule: defaultWeeklySchedule(),
     temporarily_unavailable: false,
@@ -47,6 +48,7 @@ export function saveDonorAvailability(avail: DonorAvailability): void {
 
 export function isDonorAvailable(avail?: DonorAvailability): boolean {
   const a = avail ?? getDonorAvailability();
+  if (!a.active) return false;
   if (a.temporarily_unavailable) return false;
   if (a.mode === "unavailable") return false;
   return true;
@@ -116,6 +118,21 @@ export function isDonorAvailableAtTime(
   return { available: false, reason: "Availability not configured" };
 }
 
+// ── Toggle ──────────────────────────────────────────────────────────
+
+export function setDonorActive(active: boolean): void {
+  const avail = getDonorAvailability();
+  avail.active = active;
+  saveDonorAvailability(avail);
+}
+
+export function toggleDonorActive(): boolean {
+  const avail = getDonorAvailability();
+  avail.active = !avail.active;
+  saveDonorAvailability(avail);
+  return avail.active;
+}
+
 // ── Mode Update ─────────────────────────────────────────────────────
 
 export function setAvailabilityMode(mode: DonorAvailabilityMode): void {
@@ -138,6 +155,64 @@ export function clearTemporaryUnavailable(): void {
   delete avail.unavailable_until;
   delete avail.unavailable_reason;
   saveDonorAvailability(avail);
+}
+
+// ── Days of Week Support ────────────────────────────────────────────
+
+export function updateDaysOfWeek(days: number[]): void {
+  const avail = getDonorAvailability();
+  avail.days_of_week = days;
+  saveDonorAvailability(avail);
+}
+
+export function updateTimeWindows(windows: TimeRange[]): void {
+  const avail = getDonorAvailability();
+  avail.time_windows = windows;
+  saveDonorAvailability(avail);
+}
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+export function getDayLabels(): string[] {
+  return DAY_LABELS;
+}
+
+// Check if a donor is available right now based on days_of_week + time_windows
+export function isAvailableNow(avail?: DonorAvailability): { available: boolean; reason?: string } {
+  const a = avail ?? getDonorAvailability();
+  if (!a.active) return { available: false, reason: "Inactive" };
+  if (a.temporarily_unavailable) return { available: false, reason: "Temporarily unavailable" };
+
+  if (a.mode === "unavailable") return { available: false, reason: "Unavailable" };
+  if (a.mode === "always") return { available: true };
+  if (a.mode === "emergency_only") return { available: true, reason: "Emergency only" };
+
+  if (a.mode === "scheduled") {
+    const now = new Date();
+    const currentDay = now.getDay();
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+    if (a.days_of_week && a.days_of_week.length > 0) {
+      if (!a.days_of_week.includes(currentDay)) {
+        return { available: false, reason: "Not available today" };
+      }
+    }
+
+    if (a.time_windows && a.time_windows.length > 0) {
+      const inWindow = a.time_windows.some((w) => {
+        const start = parseInt(w.start.split(":")[0]) * 60 + parseInt(w.start.split(":")[1]);
+        const end = parseInt(w.end.split(":")[0]) * 60 + parseInt(w.end.split(":")[1]);
+        return currentMinutes >= start && currentMinutes <= end;
+      });
+      if (!inWindow) {
+        return { available: false, reason: "Outside available time window" };
+      }
+    }
+
+    return { available: true };
+  }
+
+  return { available: false, reason: "Unknown mode" };
 }
 
 // ── Schedule Management ─────────────────────────────────────────────

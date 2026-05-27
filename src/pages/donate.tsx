@@ -15,11 +15,13 @@ import {
 import {
   getDonorAvailability, saveDonorAvailability, setAvailabilityMode,
   isDonorAvailable, isDonorAvailableForTier, isDonorInCooldown,
+  setDonorActive, toggleDonorActive,
+  isAvailableNow, updateDaysOfWeek, updateTimeWindows,
 } from "@/lib/donor-availability";
 import {
   getDonorOperationalData, transitionDonorState, getDonorStateLabel,
 } from "@/lib/donor-state";
-import type { DonorAvailabilityMode } from "@/types/fulfillment";
+import type { DonorAvailabilityMode, TimeRange } from "@/types/fulfillment";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +49,6 @@ const COUPONS = [
   { icon: <Droplet className="w-5 h-5" />, title: "Health Drink Offer", sub: "Free Glucon-D with next donation", code: "LLDRINK", color: "bg-emerald-50 border-emerald-200 text-emerald-700" },
 ];
 
-type DonorRecord = { id: number; availability_toggle: boolean; last_donation_date: string | null; lifeline_donations: number; pre_lifeline_donations: number; donor_score: number };
 type PostState = "idle" | "confirm-prompt" | "awaiting" | "celebration" | "missed";
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -56,29 +57,26 @@ export default function Donate() {
   const [, setLocation] = useLocation();
   const { profile, updateProfile } = useProfile();
 
-  const [isAvailable, setIsAvailable] = useState(false);
-  const [donorRecord, setDonorRecord] = useState<DonorRecord | null>(null);
-  const [loadingToggle, setLoadingToggle] = useState(false);
-  const [syncError, setSyncError] = useState(false);
+  const [isAvailable, setIsAvailable] = useState(() => getDonorAvailability().active && isDonorAvailable());
+  const [donorRecord, setDonorRecord] = useState<{ id: number; last_donation_date: string | null; lifeline_donations: number; pre_lifeline_donations: number; donor_score: number } | null>(null);
   const [commitments, setCommitments] = useState<Commitment[]>([]);
   const [postState, setPostState] = useState<PostState>("idle");
   const [activeCommitment, setActiveCommitment] = useState<Commitment | null>(null);
   const [celebrationData, setCelebrationData] = useState<{ newCount: number; newLives: number; newStreak: number } | null>(null);
+  const [availVersion, setAvailVersion] = useState(0);
 
   const donorIdRef = useRef<number | null>(null);
 
-  // Load donor record from DB (for toggle persistence + stats sync)
-  // Also re-fetches whenever the tab becomes visible (fixes reset-on-tab-switch)
+  // Load donor record from DB for stats sync (non-blocking)
   useEffect(() => {
     if (!profile?.phone) return;
 
     const fetchDonorData = async () => {
       try {
         const res = await fetch(`/api/users/lookup?phone=${encodeURIComponent(profile.phone)}`);
-        if (!res.ok) { setSyncError(true); return; }
-        const { donor } = await res.json() as { donor: DonorRecord | null };
+        if (!res.ok) return;
+        const { donor } = await res.json() as { donor: { id: number; availability_toggle: boolean; last_donation_date: string | null; lifeline_donations: number; pre_lifeline_donations: number; donor_score: number } | null };
         if (donor) {
-          setSyncError(false);
           setDonorRecord(donor);
           donorIdRef.current = donor.id;
           updateProfile({
@@ -86,33 +84,11 @@ export default function Donate() {
             preLifelineDonations: donor.pre_lifeline_donations,
             lastDonationDate: donor.last_donation_date ?? undefined,
           });
-          // Auto-disable toggle if donor is within 90-day cooldown
-          const eligible = calcEligibility(donor.last_donation_date ?? undefined).eligible;
-          if (!eligible && donor.availability_toggle) {
-            setIsAvailable(false);
-            try {
-              await fetch(`/api/donors/${donor.id}/toggle`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ availability_toggle: false }),
-              });
-            } catch { /* silent */ }
-          } else {
-            setIsAvailable(donor.availability_toggle);
-          }
-        } else {
-          setSyncError(true);
         }
-      } catch { setSyncError(true); }
+      } catch { /* silent — localStorage is source of truth */ }
     };
 
     fetchDonorData();
-
-    const handleVisibility = () => {
-      if (document.visibilityState === "visible") fetchDonorData();
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [profile?.phone]);
 
   // Load commitments
@@ -142,16 +118,15 @@ export default function Donate() {
           setCelebrationData({ newCount, newLives: newCount * 3, newStreak });
           setPostState("celebration");
           setCommitments(getCommitments());
-          // Turn off availability immediately — backend also sets this on /respond, but sync UI now
+          // Turn off availability immediately
+          setDonorActive(false);
           setIsAvailable(false);
           if (donorIdRef.current) {
-            try {
-              await fetch(`/api/donors/${donorIdRef.current}/toggle`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ availability_toggle: false }),
-              });
-            } catch { /* silent */ }
+            fetch(`/api/donors/${donorIdRef.current}/toggle`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ availability_toggle: false }),
+            }).catch(() => {});
           }
           return;
         }
@@ -159,22 +134,18 @@ export default function Donate() {
     }
   }, [profile]);
 
-  // Toggle persistence
-  const handleToggle = useCallback(async () => {
-    const next = !isAvailable;
+  // Toggle persistence — localStorage first, API fire-and-forget
+  const handleToggle = useCallback(() => {
+    const next = toggleDonorActive();
     setIsAvailable(next);
     if (donorIdRef.current) {
-      setLoadingToggle(true);
-      try {
-        await fetch(`/api/donors/${donorIdRef.current}/toggle`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ availability_toggle: next }),
-        });
-      } catch { /* silent */ }
-      setLoadingToggle(false);
+      fetch(`/api/donors/${donorIdRef.current}/toggle`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ availability_toggle: next }),
+      }).catch(() => {});
     }
-  }, [isAvailable]);
+  }, []);
 
   // Mark as donated → awaiting confirmation
   const handleConfirmDonated = useCallback(async () => {
@@ -380,8 +351,12 @@ export default function Donate() {
 
   const donorAvail = getDonorAvailability();
   const donorOps = getDonorOperationalData();
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void availVersion;
+  const nowAvail = isAvailableNow();
   const availModes: { value: DonorAvailabilityMode; label: string; desc: string }[] = [
     { value: "always", label: "Always Available", desc: "Receive all matching requests" },
+    { value: "scheduled", label: "Scheduled", desc: "Set specific days & times" },
     { value: "emergency_only", label: "Emergency Only", desc: "Only critical requests" },
     { value: "unavailable", label: "Unavailable", desc: "Pause all matching" },
   ];
@@ -416,8 +391,8 @@ export default function Donate() {
             </div>
             <button
               onClick={handleToggle}
-              disabled={loadingToggle || !eligibility.eligible}
-              className={`relative w-16 h-9 rounded-full transition-colors duration-300 flex-shrink-0 ml-4 ${isAvailable ? "bg-emerald-500" : "bg-muted"} ${(loadingToggle || !eligibility.eligible) ? "opacity-40 cursor-not-allowed" : ""}`}>
+              disabled={!eligibility.eligible}
+              className={`relative w-16 h-9 rounded-full transition-colors duration-300 flex-shrink-0 ml-4 ${isAvailable ? "bg-emerald-500" : "bg-muted"} ${!eligibility.eligible ? "opacity-40 cursor-not-allowed" : ""}`}>
               <motion.div animate={{ x: isAvailable ? 28 : 4 }} transition={{ type: "spring", stiffness: 400, damping: 30 }}
                 className="absolute top-1.5 w-6 h-6 bg-white rounded-full shadow-md" />
             </button>
@@ -439,11 +414,11 @@ export default function Donate() {
                 </span>
               </motion.div>
             )}
-            {syncError && (
+            {isAvailable && !eligibility.eligible && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
                 className="flex items-center gap-2 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-xl p-3 mt-2">
                 <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
-                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Availability sync unavailable — toggle state will not be saved</span>
+                <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Within cooldown period — toggle won't match requests</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -472,7 +447,7 @@ export default function Donate() {
           <div className="space-y-2">
             {availModes.map((m) => (
               <button key={m.value} disabled={!eligibility.eligible}
-                onClick={() => { setAvailabilityMode(m.value); }}
+                onClick={() => { setAvailabilityMode(m.value); setAvailVersion(v => v + 1); }}
                 className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${donorAvail.mode === m.value ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"} ${!eligibility.eligible ? "opacity-40" : ""}`}>
                 <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${donorAvail.mode === m.value ? "border-primary" : "border-muted-foreground"}`}>
                   {donorAvail.mode === m.value && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
@@ -486,8 +461,86 @@ export default function Donate() {
           </div>
           <p className="text-[10px] text-muted-foreground mt-2 text-center">
             State: {getDonorStateLabel(donorOps.state)}
+            {donorAvail.mode === "scheduled" && donorAvail.days_of_week && donorAvail.days_of_week.length > 0 && (
+              <span className="block mt-1">Days: {donorAvail.days_of_week.map(d => ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d]).join(", ")}</span>
+            )}
+            {donorAvail.mode === "scheduled" && donorAvail.time_windows && donorAvail.time_windows.length > 0 && (
+              <span className="block mt-1">Times: {donorAvail.time_windows.map(w => `${w.start}-${w.end}`).join(", ")}</span>
+            )}
+            {!nowAvail.available && donorAvail.mode !== "unavailable" && donorAvail.active && (
+              <span className="block mt-1 text-amber-500">{nowAvail.reason}</span>
+            )}
           </p>
         </div>
+
+        {/* ── SCHEDULED MODE SETTINGS ── */}
+        {donorAvail.mode === "scheduled" && (
+          <div className="bg-card border border-border rounded-2xl p-4">
+            <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Your Schedule</p>
+
+            <p className="text-xs font-semibold text-foreground mb-2">Available Days</p>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map((label, i) => {
+                const selected = donorAvail.days_of_week?.includes(i) ?? false;
+                return (
+                  <button key={label}
+                    onClick={() => {
+                      const current = donorAvail.days_of_week ?? [];
+                      const next = selected ? current.filter(d => d !== i) : [...current, i].sort();
+                      updateDaysOfWeek(next);
+                      setAvailVersion(v => v + 1);
+                    }}
+                    className={`w-10 h-10 rounded-xl text-xs font-bold transition-all ${
+                      selected ? "bg-primary text-white" : "bg-muted text-muted-foreground"
+                    }`}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+
+            <p className="text-xs font-semibold text-foreground mb-2">Time Windows</p>
+            <div className="space-y-2">
+              {(donorAvail.time_windows?.length ? donorAvail.time_windows : [{ start: "09:00", end: "17:00" }]).map((window, wi) => (
+                <div key={wi} className="flex items-center gap-2">
+                  <input type="time" defaultValue={window.start}
+                    onChange={(e) => {
+                      const windows = [...(donorAvail.time_windows ?? [{ start: "09:00", end: "17:00" }])];
+                      windows[wi] = { ...windows[wi], start: e.target.value };
+                      updateTimeWindows(windows);
+                      setAvailVersion(v => v + 1);
+                    }}
+                    className="flex-1 h-10 px-3 rounded-xl bg-muted border border-border text-sm text-foreground" />
+                  <span className="text-xs text-muted-foreground">to</span>
+                  <input type="time" defaultValue={window.end}
+                    onChange={(e) => {
+                      const windows = [...(donorAvail.time_windows ?? [{ start: "09:00", end: "17:00" }])];
+                      windows[wi] = { ...windows[wi], end: e.target.value };
+                      updateTimeWindows(windows);
+                      setAvailVersion(v => v + 1);
+                    }}
+                    className="flex-1 h-10 px-3 rounded-xl bg-muted border border-border text-sm text-foreground" />
+                  <button onClick={() => {
+                    const windows = (donorAvail.time_windows ?? [{ start: "09:00", end: "17:00" }]).filter((_, idx) => idx !== wi);
+                    updateTimeWindows(windows.length > 0 ? windows : [{ start: "09:00", end: "17:00" }]);
+                    setAvailVersion(v => v + 1);
+                  }}
+                    className="w-10 h-10 rounded-xl bg-red-50 text-red-500 text-xs font-bold">
+                    X
+                  </button>
+                </div>
+              ))}
+              <button onClick={() => {
+                const windows = [...(donorAvail.time_windows ?? []), { start: "14:00", end: "18:00" }];
+                updateTimeWindows(windows);
+                setAvailVersion(v => v + 1);
+              }}
+                className="w-full h-10 border-2 border-dashed border-border rounded-xl text-xs font-semibold text-muted-foreground hover:border-primary/30">
+                + Add Time Window
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* ── DONATION STATS ── */}
         <div className="bg-card border border-border rounded-2xl p-5">

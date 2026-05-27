@@ -14,7 +14,7 @@ import {
   canTransition,
 } from "@/types/fulfillment";
 import { generateLifelineId } from "@/lib/lifeline-id";
-import { writeAuditEntry, logRequestCreated, logStatusChanged, logError } from "@/lib/audit-log";
+import { writeAuditEntry, logRequestCreated, logStatusChanged, logDonorResponded, logError } from "@/lib/audit-log";
 import { initEscalation } from "@/lib/escalation";
 
 const STORE_KEY = "lifeline_blood_requests";
@@ -273,7 +273,8 @@ export function recordDonorResponse(
   requests[idx] = req;
   writeStore(requests);
 
-  // Sprint 2: audit status transitions
+  // Sprint 2: audit donor response + status transitions
+  try { logDonorResponded(requestId, donorId, state); } catch { /* silent */ }
   if (prevStatus !== req.status) {
     try { logStatusChanged(requestId, prevStatus, req.status, "system", `auto: donor ${state}`); } catch { /* silent */ }
   }
