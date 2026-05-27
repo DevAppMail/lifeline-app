@@ -49,6 +49,7 @@ continuityRouter.get("/continuity", requireFederatedAuth, async (c) => {
     const meta = safeParseJson(String(a.notes ?? "{}"));
     return {
       id: String(a.id),
+      doctorId: meta.admin_id ? Number(meta.admin_id) : undefined,
       doctorName: String(meta.name ?? "Doctor"),
       doctorSpecialty: String(meta.specialty ?? ""),
       clinicName: "",

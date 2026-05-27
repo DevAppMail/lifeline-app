@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ChevronLeft, Pencil, Check, X, LogOut, Bell, Lock,
-  Heart, Droplet, Activity, User, MapPin, Briefcase,
+  ChevronLeft, Pencil, Check, X, LogOut, Lock,
+  Heart, Droplet, Activity, User, MapPin, Briefcase, Bell,
   ShieldCheck, Trophy, Flame, Users, ChevronRight,
   CalendarDays, Clock, Star, AlertTriangle, RotateCcw,
   CheckCircle2, XCircle, AlertCircle, Stethoscope, ChevronDown, ChevronUp,
@@ -12,6 +12,7 @@ import { useProfile, BloodGroup } from "@/context/profile-context";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { toast } from "@/hooks/use-toast";
 import { useContinuity } from "@/hooks/useContinuity";
 import { ContinuitySummary } from "@/components/continuity";
 
@@ -237,15 +238,20 @@ export default function Profile() {
     if (!ratingAppt || ratingValue === 0) return;
     setRatingSubmitting(true);
     try {
-      const res = await fetch(`/api/appointments/${ratingAppt.id}/rate`, {
+      const res = await bffFetch(`/api/app/appointments/${ratingAppt.id}/rate`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ rating: ratingValue, comment: ratingComment }),
       });
       if (res.ok) {
         await fetchAppointments();
         setRatingAppt(null); setRatingValue(0); setRatingComment("");
+      } else {
+        const err = await res.json().catch(() => ({ error: "Rating failed" }));
+        toast({ title: "Rating failed", description: err.error ?? "Something went wrong", variant: "destructive" });
       }
-    } catch {}
+    } catch {
+      toast({ title: "Network error", description: "Could not reach server", variant: "destructive" });
+    }
     setRatingSubmitting(false);
   };
 
@@ -722,6 +728,10 @@ export default function Profile() {
           <Activity className="w-5 h-5" />
           <span className="text-[10px] font-medium">Requests</span>
         </button>
+        <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground">
+          <Bell className="w-5 h-5" />
+          <span className="text-[10px] font-medium">Alerts</span>
+        </Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-primary">
           <User className="w-5 h-5 fill-primary/30" />
           <span className="text-[10px] font-semibold">Profile</span>

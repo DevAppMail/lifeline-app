@@ -123,15 +123,6 @@ function App() {
                     <Router />
                   </AuthGuard>
                 </WouterRouter>
-                {/* Platform identity footer */}
-                <div
-                  className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] py-1.5 px-4 bg-background/80 backdrop-blur-sm text-center pointer-events-none"
-                  style={{ zIndex: 4 }}
-                >
-                  <p className="text-[10px] text-muted-foreground/40 leading-tight">
-                    LifeLine is a voluntary donor matching platform — not a blood bank or medical service provider.
-                  </p>
-                </div>
                 <Toaster />
               </div>
             </div>

@@ -31,6 +31,7 @@ export interface ReminderEvent {
   entityType: ReminderEntityType;
   entityId: string;
   correlationGroup: string | null;
+  doctorId?: number | null;
   appointmentId: string | null;
   consultationId: string | null;
   prescriptionId: string | null;
@@ -51,4 +52,5 @@ export type ReminderAction =
   | { type: "mark_read"; id: string }
   | { type: "dismiss"; id: string }
   | { type: "snooze"; id: string; until: string }
+  | { type: "rebook"; id: string }
   | { type: "mark_all_read" };

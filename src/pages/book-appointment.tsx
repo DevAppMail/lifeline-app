@@ -39,6 +39,16 @@ function generateSlots(start: string, end: string): string[] {
   return slots;
 }
 
+function to24h(time12: string): string {
+  const parts = time12.split(" ");
+  const time = parts[0]; const modifier = parts[1];
+  if (!time || !modifier) return time12;
+  let [hours, minutes] = time.split(":").map(Number);
+  if (modifier === "PM" && hours! < 12) hours! += 12;
+  if (modifier === "AM" && hours === 12) hours = 0;
+  return `${String(hours).padStart(2, "0")}:${String(minutes ?? 0).padStart(2, "0")}`;
+}
+
 function getNext14Days(): Date[] {
   return Array.from({ length: 14 }, (_, i) => {
     const d = new Date(); d.setDate(d.getDate() + i + 1); return d;
@@ -129,7 +139,7 @@ export default function BookAppointment() {
           doctor_name: doc.name,
           doctor_phone: doc.phone || null,
           appointment_date: selectedDay,
-          appointment_time: selectedSlot,
+          appointment_time: to24h(selectedSlot!),
           for_self: forSelf,
           patient_name_override: !forSelf ? otherName : null,
           relation: !forSelf ? relation : null,

@@ -11,6 +11,7 @@ import { useProfile } from "@/context/profile-context";
 import { getSeenIds } from "@/lib/commitments";
 import { useContinuity } from "@/hooks/useContinuity";
 import { useReminders } from "@/hooks/useReminders";
+import { CommitmentStrip } from "@/components/commitment-strip";
 import { ContinuitySummary, ContinuityTimeline } from "@/components/continuity";
 
 // ── Ad Types ──────────────────────────────────────────────────────────────────
@@ -609,6 +610,8 @@ export default function Home() {
         </div>
       </div>
 
+      <CommitmentStrip />
+
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-5 space-y-6">
 
@@ -814,6 +817,13 @@ export default function Home() {
             <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">{requestsBadge}</span>
           )}
           <span className="text-[10px] font-medium">Requests</span>
+        </Link>
+        <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground relative">
+          <Bell className="w-5 h-5" />
+          {reminderCount > 0 && (
+            <span className="absolute -top-1 -right-1 min-w-[16px] h-4 bg-primary text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">{reminderCount > 99 ? "99+" : reminderCount}</span>
+          )}
+          <span className="text-[10px] font-medium">Alerts</span>
         </Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground">
           <User className="w-5 h-5" />

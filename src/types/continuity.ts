@@ -7,6 +7,7 @@ export type ContinuityEntityType =
 
 export interface ContinuityAppointment {
   id: string;
+  doctorId?: number;
   doctorName: string;
   doctorSpecialty: string;
   clinicName: string;

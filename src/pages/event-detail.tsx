@@ -242,19 +242,21 @@ export default function EventDetail() {
                   />
                 </div>
 
-                <div>
-                  <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Blood Group <span className="font-normal">(optional)</span></label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {BLOOD_GROUPS.map(bg => (
-                      <button key={bg} onClick={() => setFormBloodGroup(formBloodGroup === bg ? "" : bg)}
-                        className={`h-10 rounded-xl text-sm font-bold border-2 transition-all ${
-                          formBloodGroup === bg ? "bg-primary text-white border-primary" : "bg-card border-border text-foreground"
-                        }`}>
-                        {bg}
-                      </button>
-                    ))}
+                {!profile?.bloodGroup && (
+                  <div>
+                    <label className="text-xs font-semibold text-muted-foreground block mb-1.5">Blood Group <span className="font-normal">(optional)</span></label>
+                    <div className="grid grid-cols-4 gap-2">
+                      {BLOOD_GROUPS.map(bg => (
+                        <button key={bg} onClick={() => setFormBloodGroup(formBloodGroup === bg ? "" : bg)}
+                          className={`h-10 rounded-xl text-sm font-bold border-2 transition-all ${
+                            formBloodGroup === bg ? "bg-primary text-white border-primary" : "bg-card border-border text-foreground"
+                          }`}>
+                          {bg}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <button
                   onClick={handleRegister}

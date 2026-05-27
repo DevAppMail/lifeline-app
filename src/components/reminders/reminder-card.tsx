@@ -99,6 +99,12 @@ export function ReminderCard({ reminder, onAction }: ReminderCardProps) {
                 </div>
 
                 <div className="flex gap-2 mt-3">
+                  {reminder.entityType === "appointment" && reminder.doctorId && (
+                    <button onClick={() => onAction({ type: "rebook", id: reminder.id })}
+                      className="flex-1 py-2 bg-primary/10 text-primary border border-primary/20 rounded-xl text-xs font-bold hover:bg-primary/20 transition-colors">
+                      Rebook
+                    </button>
+                  )}
                   <button onClick={() => onAction({ type: "mark_read", id: reminder.id })}
                     className="flex-1 py-2 border border-border rounded-xl text-xs font-semibold text-muted-foreground hover:bg-muted transition-colors">
                     Mark read

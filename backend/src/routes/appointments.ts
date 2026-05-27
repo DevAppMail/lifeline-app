@@ -33,9 +33,9 @@ appointmentsRouter.get("/appointments", requireFederatedAuth, async (c) => {
           patient_name_override: r.patient_name ? String(r.patient_name) : null,
           reason: r.patient_visible_note ? String(r.patient_visible_note) : null,
           fee: null,
-          rating: null,
-          rating_comment: null,
-          rated_at: null,
+          rating: (meta.rating as number) ?? null,
+          rating_comment: (meta.rating_comment as string) ?? null,
+          rated_at: (meta.rated_at as string) ?? null,
           doctor_confirmed: r.status === "confirmed",
           deposit_held: false,
           deposit_amount: null,
@@ -156,6 +156,54 @@ appointmentsRouter.patch("/appointments/:id/cancel", requireFederatedAuth, async
     identity,
     method: "PATCH",
     body: JSON.stringify(body),
+    contentType: "application/json",
+  });
+  const data = await response.json();
+  return c.json(data, response.status as 200 | 400 | 500);
+});
+
+appointmentsRouter.patch("/appointments/:id/rate", requireFederatedAuth, async (c) => {
+  const identity = c.var.identity;
+  const id = c.req.param("id");
+  const { rating, comment } = await c.req.json() as { rating: number; comment?: string };
+  if (!rating || rating < 1 || rating > 5) {
+    return c.json({ error: "rating must be 1–5" }, 400);
+  }
+
+  const proPatientId = identity.pro_patient_id;
+  if (proPatientId && /^[0-9a-f-]+$/i.test(id)) {
+    try {
+      const rows = await queryProTable<Record<string, unknown>>("pro_appointments", {
+        id: `eq.${id}`,
+        patient_id: `eq.${proPatientId}`,
+        select: "*",
+      });
+      if (rows.length > 0) {
+        const appt = rows[0]!;
+        if (appt.status !== "completed") {
+          return c.json({ error: "Only completed appointments can be rated" }, 400);
+        }
+        const rawNotes = String(appt.notes || "{}");
+        let meta: Record<string, unknown> = {};
+        try { meta = JSON.parse(rawNotes) as Record<string, unknown>; } catch { meta = {}; }
+        meta.rating = rating;
+        meta.rating_comment = comment || null;
+        meta.rated_at = new Date().toISOString();
+
+        await updateProTable("pro_appointments", "id", id, {
+          notes: JSON.stringify(meta),
+          status: "completed",
+        });
+        return c.json({ success: true });
+      }
+    } catch {}
+  }
+
+  if (!/^\d+$/.test(id)) return c.json({ error: "Appointment not found" }, 404);
+  const response = await proxyToAdmin(`/api/appointments/${id}/rate`, "", {
+    identity,
+    method: "PATCH",
+    body: JSON.stringify({ rating, comment }),
     contentType: "application/json",
   });
   const data = await response.json();

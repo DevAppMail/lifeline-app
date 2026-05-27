@@ -1,5 +1,6 @@
 export interface AppointmentDTO {
   id: string;
+  doctorId?: number;
   doctorName: string;
   doctorSpecialty: string;
   clinicName: string;

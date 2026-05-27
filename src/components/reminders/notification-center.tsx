@@ -17,6 +17,19 @@ export function NotificationCenter({ reminders, unreadCount, dispatch, loading }
   const [, setLocation] = useLocation();
   const totalItems = reminders.reduce((s, g) => s + g.items.length, 0);
 
+  const handleAction = (action: ReminderAction) => {
+    if (action.type === "rebook") {
+      const reminder = reminders.flatMap(g => g.items).find(r => r.id === action.id);
+      if (reminder?.doctorId) {
+        setLocation(`/book-appointment/${reminder.doctorId}`);
+        return;
+      }
+      setLocation("/book-doctor");
+      return;
+    }
+    dispatch(action);
+  };
+
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background pb-8">
       {/* Header */}
@@ -78,7 +91,7 @@ export function NotificationCenter({ reminders, unreadCount, dispatch, loading }
                 <div className="space-y-2.5">
                   {group.items.map((reminder, i) => (
                     <motion.div key={reminder.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}>
-                      <ReminderCard reminder={reminder} onAction={dispatch} />
+                      <ReminderCard reminder={reminder} onAction={handleAction} />
                     </motion.div>
                   ))}
                 </div>

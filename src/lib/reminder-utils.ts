@@ -70,6 +70,7 @@ function generateAppointmentReminders(continuity: PatientContinuity): ReminderEv
         entityType: "appointment",
         entityId: apt.id,
         correlationGroup: `apt-${apt.id}`,
+        doctorId: apt.doctorId ?? null,
         appointmentId: apt.id,
         consultationId: null,
         prescriptionId: null,
@@ -99,6 +100,7 @@ function generateAppointmentReminders(continuity: PatientContinuity): ReminderEv
         entityType: "appointment",
         entityId: apt.id,
         correlationGroup: `apt-${apt.id}`,
+        doctorId: apt.doctorId ?? null,
         appointmentId: apt.id,
         consultationId: null,
         prescriptionId: null,
@@ -453,7 +455,7 @@ export function groupRemindersByDate(reminders: ReminderEvent[]): { label: strin
 export function getActiveReminders(reminders: ReminderEvent[]): ReminderEvent[] {
   const now = Date.now();
   return reminders.filter(r => {
-    if (r.status === "dismissed" || r.status === "completed") return false;
+    if (r.status === "read" || r.status === "dismissed" || r.status === "completed") return false;
     if (r.status === "snoozed" && r.snoozedUntil && new Date(r.snoozedUntil).getTime() > now) return false;
     if (r.expiresAt && new Date(r.expiresAt).getTime() < now) return false;
     return true;

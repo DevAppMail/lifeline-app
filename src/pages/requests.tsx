@@ -497,6 +497,7 @@ export default function Requests() {
         <Link href="/home" className="flex flex-col items-center gap-1 text-muted-foreground"><Heart className="w-5 h-5" /><span className="text-[10px] font-medium">Home</span></Link>
         <Link href="/donate" className="flex flex-col items-center gap-1 text-muted-foreground"><Droplet className="w-5 h-5" /><span className="text-[10px] font-medium">Donate</span></Link>
         <Link href="/requests" className="flex flex-col items-center gap-1 text-primary relative"><Activity className="w-5 h-5" /><span className="text-[10px] font-semibold">Requests</span></Link>
+        <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground"><Bell className="w-5 h-5" /><span className="text-[10px] font-medium">Alerts</span></Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground"><User className="w-5 h-5" /><span className="text-[10px] font-medium">Profile</span></Link>
       </nav>
       <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
