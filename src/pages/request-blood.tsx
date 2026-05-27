@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useProfile } from "@/context/profile-context";
+import { createRequest } from "@/lib/request-store";
 
 type Tier = "scheduled" | "urgent" | "emergency" | null;
 type BloodGroup = "A+" | "A-" | "B+" | "B-" | "AB+" | "AB-" | "O+" | "O-";
@@ -900,6 +901,29 @@ export default function RequestBlood() {
     setPaying(true);
     await new Promise((r) => setTimeout(r, 2000));
     const result = await submitToApi();
+
+    // Create local lifecycle-managed request for request-status tracking
+    try {
+      createRequest(
+        {
+          patient_name: patientName,
+          relationship,
+          blood_group: bloodGroup as BloodGroup | "",
+          units_needed: units,
+          hospital_name: hospital,
+          hospital_city: hospitalCity,
+          required_date: reqDate,
+          required_time: reqTime || undefined,
+          tier: (tier ?? "scheduled") as "scheduled" | "urgent" | "emergency",
+          doctor_note_uploaded: docUploaded,
+          selfie_captured: selfieData !== null,
+          consent_timestamp: consentTimestamp,
+        },
+        profile?.phone ?? "",
+        profile?.name
+      );
+    } catch { /* silent — API result is authoritative */ }
+
     setPaying(false);
     const qs = new URLSearchParams({
       bg: bloodGroup,

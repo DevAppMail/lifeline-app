@@ -4,12 +4,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Droplet, Heart, Activity, User, AlertTriangle, Clock, Zap,
   MapPin, Timer, ChevronRight, RefreshCw, CheckCircle2, XCircle,
-  Bell, Plus,
+  Bell, Plus, Loader2,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
-import { markAsSeen } from "@/lib/commitments";
+import { markAsSeen, getCommitments } from "@/lib/commitments";
+import { getAllActiveRequests, getRequestsByRequester, checkAutoExpiry } from "@/lib/request-store";
+import type { BloodRequestFull, RequestLifecycleStatus } from "@/types/fulfillment";
 
-interface BloodRequest {
+interface BloodRequestLegacy {
   id: number;
   patient_name: string;
   blood_group: string;
@@ -61,10 +63,11 @@ function timeAgo(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-const DISTANCES: Record<number, string> = {};
-function simDistance(id: number): string {
-  if (!DISTANCES[id]) DISTANCES[id] = `${(Math.random() * 12 + 0.5).toFixed(1)} km`;
-  return DISTANCES[id];
+const DISTANCES: Record<string, string> = {};
+function simDistance(id: string | number): string {
+  const key = String(id);
+  if (!DISTANCES[key]) DISTANCES[key] = `${(Math.random() * 12 + 0.5).toFixed(1)} km`;
+  return DISTANCES[key];
 }
 
 export default function Requests() {
@@ -74,9 +77,10 @@ export default function Requests() {
   const initialTab = new URLSearchParams(window.location.search).get("tab") === "mine" ? "mine" : "donate";
   const [activeTab, setActiveTab] = useState<"donate" | "mine">(initialTab as "donate" | "mine");
 
-  const [requests, setRequests] = useState<BloodRequest[]>([]);
+  const [requests, setRequests] = useState<BloodRequestLegacy[]>([]);
   const [loading, setLoading] = useState(true);
-  const [myRequests, setMyRequests] = useState<BloodRequest[]>([]);
+  const [myRequests, setMyRequests] = useState<BloodRequestLegacy[]>([]);
+  const [localRequests, setLocalRequests] = useState<BloodRequestFull[]>([]);
   const [loadingMine, setLoadingMine] = useState(false);
   const [pendingConfirmations, setPendingConfirmations] = useState<DonationConfirmation[]>([]);
   const [userId, setUserId] = useState<number | null>(null);
@@ -110,7 +114,7 @@ export default function Requests() {
     setLoading(true);
     try {
       const res = await fetch("/api/blood-requests?status=pending");
-      const data: BloodRequest[] = await res.json();
+      const data: BloodRequestLegacy[] = await res.json();
       const bloodGroup = profile?.bloodGroup || "";
       const matching = data.filter((r) => !bloodGroup || r.blood_group === bloodGroup);
       matching.sort((a, b) => {
@@ -119,7 +123,7 @@ export default function Requests() {
         return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       });
       setRequests(matching);
-      markAsSeen(matching.map((r) => r.id));
+      markAsSeen(matching.map((r) => String(r.id)));
     } catch { setRequests([]); }
     finally { setLoading(false); }
   }, [profile?.bloodGroup]);
@@ -129,21 +133,33 @@ export default function Requests() {
     try {
       const res = await fetch(`/api/blood-requests?requester_id=${uid}`);
       if (res.ok) {
-        const data: BloodRequest[] = await res.json();
+        const data: BloodRequestLegacy[] = await res.json();
         setMyRequests(data.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       }
     } catch { setMyRequests([]); }
     finally { setLoadingMine(false); }
   }, []);
 
+  const loadLocalRequests = useCallback(() => {
+    checkAutoExpiry();
+    if (profile?.phone) {
+      const local = getRequestsByRequester(profile.phone);
+      setLocalRequests(local);
+    }
+  }, [profile?.phone]);
+
   useEffect(() => {
     if (!profile) { setLocation("/login"); return; }
     loadRequests();
-  }, [profile, loadRequests]);
+    loadLocalRequests();
+  }, [profile, loadRequests, loadLocalRequests]);
 
   useEffect(() => {
-    if (userId && activeTab === "mine") loadMyRequests(userId);
-  }, [userId, activeTab, loadMyRequests]);
+    if (userId && activeTab === "mine") {
+      loadMyRequests(userId);
+      loadLocalRequests();
+    }
+  }, [userId, activeTab, loadMyRequests, loadLocalRequests]);
 
   const handleRespond = async (confirmation: DonationConfirmation, response: "confirmed" | "no_show") => {
     setRespondingId(confirmation.id);
@@ -159,9 +175,12 @@ export default function Requests() {
     finally { setRespondingId(null); }
   };
 
+  const localRequestCount = localRequests.filter((r) =>
+    ["active", "searching", "partially_fulfilled"].includes(r.status)
+  ).length;
+
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background pb-24">
-      {/* Header */}
       <div className="bg-primary px-5 pt-12 pb-5 rounded-b-[2rem] shadow-md shadow-primary/20">
         <div className="flex items-center justify-between">
           <div>
@@ -173,7 +192,7 @@ export default function Requests() {
             </p>
           </div>
           <button
-            onClick={() => activeTab === "donate" ? loadRequests() : userId && loadMyRequests(userId)}
+            onClick={() => activeTab === "donate" ? loadRequests() : (loadMyRequests(userId!), loadLocalRequests())}
             className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center text-white"
           >
             <RefreshCw className="w-4 h-4" />
@@ -190,7 +209,6 @@ export default function Requests() {
         )}
       </div>
 
-      {/* Tab switcher */}
       <div className="flex px-4 pt-4 gap-2">
         {(["donate", "mine"] as const).map((tab) => (
           <button
@@ -203,13 +221,17 @@ export default function Requests() {
             }`}
           >
             {tab === "donate" ? "Donate" : "My Requests"}
+            {tab === "mine" && localRequestCount > 0 && (
+              <span className="ml-1.5 bg-white/20 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {localRequestCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 pt-3 space-y-4">
 
-        {/* ── DONATE TAB ── */}
         {activeTab === "donate" && (
           <>
             {pendingConfirmations.length > 0 && (
@@ -237,7 +259,7 @@ export default function Requests() {
                           <p className="text-xs text-muted-foreground mt-0.5">{conf.hospital_name}</p>
                           {conf.donation_date && <p className="text-xs text-muted-foreground">{conf.donation_date}</p>}
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            Marked at {new Date(conf.donor_confirmed_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })},{" "}
+                            Marked at {new Date(conf.donor_confirmed_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })},{ " "}
                             {new Date(conf.donor_confirmed_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                           </p>
                         </div>
@@ -341,14 +363,13 @@ export default function Requests() {
           </>
         )}
 
-        {/* ── MY REQUESTS TAB ── */}
         {activeTab === "mine" && (
           <section>
             {loadingMine ? (
               Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="bg-card border border-border rounded-2xl p-4 animate-pulse h-28 mb-3" />
               ))
-            ) : myRequests.length === 0 ? (
+            ) : localRequests.length === 0 && myRequests.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-20 text-center px-6">
                 <div className="w-16 h-16 bg-muted rounded-2xl flex items-center justify-center mb-4">
                   <Droplet className="w-8 h-8 text-muted-foreground" />
@@ -366,17 +387,72 @@ export default function Requests() {
               </div>
             ) : (
               <AnimatePresence>
-                {myRequests.map((req, i) => {
+                {/* Local lifecycle-aware requests */}
+                {localRequests
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                  .map((req, i) => {
+                    const tierMeta = TIER_META[req.tier === "emergency" ? "critical" : req.tier === "urgent" ? "urgent" : "normal"] ?? TIER_META.normal;
+                    const statusLabel: Record<string, string> = {
+                      draft: "Draft", active: "Looking", searching: "Contacting",
+                      partially_fulfilled: "Partial", fulfilled: "Fulfilled",
+                      cancelled: "Cancelled", expired: "Expired", failed: "Failed",
+                    };
+                    const statusBadge: Record<string, string> = {
+                      draft: "bg-muted text-muted-foreground", active: "bg-blue-100 text-blue-700",
+                      searching: "bg-amber-100 text-amber-700", partially_fulfilled: "bg-emerald-100 text-emerald-700",
+                      fulfilled: "bg-emerald-100 text-emerald-700", cancelled: "bg-gray-100 text-gray-600",
+                      expired: "bg-amber-100 text-amber-700", failed: "bg-red-100 text-red-700",
+                    };
+                    return (
+                      <motion.div key={req.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                        className="bg-card rounded-2xl border border-border mb-3 overflow-hidden">
+                        <button onClick={() => setLocation(`/request-status?id=${req.lifeline_id}`)} className="block p-4 w-full text-left">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <span className="text-primary font-bold text-sm">{req.blood_group}</span>
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-foreground">{req.patient_name}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{req.units_needed} unit{req.units_needed > 1 ? "s" : ""} · {req.blood_group}</p>
+                              </div>
+                            </div>
+                            <div className="flex gap-1.5">
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${statusBadge[req.status] ?? "bg-muted text-muted-foreground"}`}>
+                                {statusLabel[req.status] ?? req.status}
+                              </span>
+                              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${tierMeta.badge}`}>
+                                {tierMeta.icon} {tierMeta.label}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1 truncate min-w-0">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />{req.hospital_name}
+                            </span>
+                            <span className="flex items-center gap-1 flex-shrink-0">
+                              <Clock className="w-3 h-3" />{timeAgo(req.created_at)}
+                            </span>
+                            {req.donors_committed > 0 && (
+                              <span className="flex items-center gap-1 flex-shrink-0 text-emerald-600">
+                                <Heart className="w-3 h-3" />{req.donors_committed}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      </motion.div>
+                    );
+                  })}
+
+                {/* Legacy API requests (fallback) */}
+                {myRequests.filter((legacy) =>
+                  !localRequests.some((l) => l.patient_name === legacy.patient_name && l.hospital_name === legacy.hospital_name)
+                ).map((req, i) => {
                   const tierInfo = TIER_META[req.request_tier] ?? TIER_META.normal;
                   const statusInfo = STATUS_META[req.status] ?? { label: req.status, badge: "bg-muted text-muted-foreground" };
                   return (
-                    <motion.div
-                      key={req.id}
-                      initial={{ opacity: 0, y: 16 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="bg-card rounded-2xl border border-border mb-3 overflow-hidden"
-                    >
+                    <motion.div key={`api-${req.id}`} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                      className="bg-card rounded-2xl border border-border mb-3 overflow-hidden">
                       <Link href={`/requests/${req.id}`} className="block p-4">
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex items-center gap-3">
@@ -413,6 +489,8 @@ export default function Requests() {
             )}
           </section>
         )}
+
+        <div className="h-16" />
       </div>
 
       <nav className="fixed bottom-0 w-full max-w-[430px] bg-card/95 backdrop-blur-md border-t border-border flex justify-around py-3 pb-safe z-50">

@@ -4,10 +4,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, AlertTriangle, Clock, Zap, Droplet, MapPin,
   Navigation, Heart, CheckCircle2, Calendar, Bell, Home, Timer,
-  Users, X,
+  Users, X, Phone, Shield,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import { addCommitment, getCommitment } from "@/lib/commitments";
+import { getRequest, recordDonorResponse } from "@/lib/request-store";
+import { isDonorAvailable, isDonorAvailableForTier, isDonorInCooldown } from "@/lib/donor-availability";
+import type { BloodGroup, RequestTier } from "@/types/fulfillment";
 
 interface BloodRequest {
   id: number;
@@ -79,6 +82,8 @@ export default function RequestDetail() {
   const [loading, setLoading] = useState(true);
   const [flowState, setFlowState] = useState<FlowState>("detail");
   const [alreadyCommitted, setAlreadyCommitted] = useState(false);
+  const [donorUnavailable, setDonorUnavailable] = useState(false);
+  const [inCooldown, setInCooldown] = useState(false);
 
   const id = params?.id ? Number(params.id) : NaN;
   const countdown = useCountdown(request?.required_date, request?.required_time);
@@ -93,8 +98,26 @@ export default function RequestDetail() {
         if (!res.ok) throw new Error();
         const data: BloodRequest = await res.json();
         setRequest(data);
-        const existing = getCommitment(id);
-        if (existing) setAlreadyCommitted(true);
+
+        // Check existing commitment
+        const existing = getCommitment(String(id));
+        if (existing) {
+          setAlreadyCommitted(true);
+        }
+
+        // Check donor availability
+        const avail = isDonorAvailable();
+        if (!avail) {
+          setDonorUnavailable(true);
+        }
+
+        // Check cooldown
+        if (profile?.lastDonationDate) {
+          const cooldown = isDonorInCooldown(profile.lastDonationDate);
+          if (cooldown.inCooldown) {
+            setInCooldown(true);
+          }
+        }
       } catch {
         setLocation("/requests");
       } finally {
@@ -114,8 +137,18 @@ export default function RequestDetail() {
       });
     } catch { /* continue */ }
 
+    // Record in local request store for lifecycle tracking
+    try {
+      recordDonorResponse(
+        String(request.id),
+        profile?.phone ?? "unknown",
+        "committed",
+        { committed_at: new Date().toISOString() }
+      );
+    } catch { /* silent */ }
+
     addCommitment({
-      requestId: request.id,
+      requestId: String(request.id),
       hospitalName: request.hospital_name,
       hospitalLocation: request.hospital_location,
       patientFirstName: request.patient_name.split(" ")[0],
@@ -124,10 +157,11 @@ export default function RequestDetail() {
       requiredTime: request.required_time ?? "",
       committedAt: new Date().toISOString(),
       status: "committed",
+      donorId: profile?.phone ?? undefined,
     });
 
     setFlowState("success");
-  }, [request, id]);
+  }, [request, id, profile?.phone]);
 
   if (loading) {
     return (
@@ -143,8 +177,9 @@ export default function RequestDetail() {
   const firstName = request.patient_name.split(" ")[0];
   const confirmedDonors = Math.floor(Math.random() * Math.min(request.units_needed, 2));
   const isCritical = request.request_tier === "critical";
+  const tierLabel = request.request_tier === "critical" ? "emergency" : request.request_tier === "urgent" ? "urgent" : "scheduled";
+  const donorAvail = isDonorAvailableForTier(tierLabel as RequestTier);
 
-  // ── SUCCESS SCREEN ──────────────────────────────────────────────────────────
   if (flowState === "success") {
     return (
       <div className="min-h-[100dvh] flex flex-col bg-background">
@@ -211,11 +246,9 @@ export default function RequestDetail() {
     );
   }
 
-  // ── COMMITMENT CONFIRMATION SCREEN ─────────────────────────────────────────
   if (flowState === "confirm") {
     return (
       <div className="min-h-[100dvh] flex flex-col bg-background">
-        {/* Header */}
         <div className="flex items-center px-5 pt-12 pb-4 border-b border-border">
           <button onClick={() => setFlowState("detail")} className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mr-3">
             <ChevronLeft className="w-5 h-5" />
@@ -278,10 +311,8 @@ export default function RequestDetail() {
     );
   }
 
-  // ── DETAIL SCREEN ───────────────────────────────────────────────────────────
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
-      {/* Tier banner */}
       <div className={`${meta.bannerBg} px-5 pt-12 pb-5`}>
         <div className="flex items-center gap-3 mb-3">
           <button onClick={() => setLocation("/requests")} className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-white">
@@ -301,7 +332,6 @@ export default function RequestDetail() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-5 space-y-5">
-        {/* Already committed banner */}
         {alreadyCommitted && (
           <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700 rounded-2xl p-4 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 flex-shrink-0" />
@@ -309,7 +339,24 @@ export default function RequestDetail() {
           </div>
         )}
 
-        {/* Patient info */}
+        {inCooldown && (
+          <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-700 rounded-2xl p-4 flex items-center gap-3">
+            <Clock className="w-5 h-5 text-amber-600 flex-shrink-0" />
+            <p className="text-sm font-semibold text-amber-700 dark:text-amber-400">
+              You're in the 90-day cooldown period. You can donate again once it ends.
+            </p>
+          </div>
+        )}
+
+        {!donorAvail && !alreadyCommitted && !inCooldown && (
+          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-700 rounded-2xl p-4 flex items-center gap-3">
+            <Shield className="w-5 h-5 text-blue-600 flex-shrink-0" />
+            <p className="text-sm font-semibold text-blue-700 dark:text-blue-400">
+              Your availability is set to &ldquo;{profile?.bloodGroup ? "limited" : "check settings"}&rdquo;. Update in your Donate page to receive matching requests.
+            </p>
+          </div>
+        )}
+
         <div className="bg-card border border-border rounded-2xl p-5">
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Patient</p>
           <div className="flex items-center gap-4">
@@ -326,7 +373,6 @@ export default function RequestDetail() {
           </div>
         </div>
 
-        {/* Donor progress */}
         <div className="bg-card border border-border rounded-2xl p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -343,7 +389,6 @@ export default function RequestDetail() {
           </p>
         </div>
 
-        {/* Hospital & logistics */}
         <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Hospital & Logistics</p>
           {[
@@ -369,7 +414,6 @@ export default function RequestDetail() {
           </a>
         </div>
 
-        {/* Requester note */}
         {request.requester_name && (
           <div className="bg-muted/50 rounded-2xl p-4">
             <p className="text-xs text-muted-foreground mb-1">Requested by</p>
@@ -378,16 +422,20 @@ export default function RequestDetail() {
         )}
       </div>
 
-      {/* Action buttons */}
       <div className="flex-shrink-0 px-5 pb-8 pt-3 border-t border-border space-y-3">
         {alreadyCommitted ? (
           <div className="w-full h-12 bg-emerald-50 border-2 border-emerald-300 rounded-xl flex items-center justify-center gap-2 text-emerald-700 font-semibold text-sm">
             <CheckCircle2 className="w-4 h-4" /> Committed
           </div>
+        ) : inCooldown ? (
+          <div className="w-full h-12 bg-amber-50 border-2 border-amber-300 rounded-xl flex items-center justify-center gap-2 text-amber-700 font-semibold text-sm">
+            <Clock className="w-4 h-4" /> In Cooldown Period
+          </div>
         ) : (
           <button
             onClick={() => setFlowState("confirm")}
-            className="w-full h-13 bg-primary text-white rounded-xl font-bold text-base flex items-center justify-center gap-2"
+            disabled={!donorAvail}
+            className="w-full h-13 bg-primary text-white rounded-xl font-bold text-base flex items-center justify-center gap-2 disabled:opacity-40"
           >
             <Heart className="w-5 h-5" /> Accept This Request
           </button>

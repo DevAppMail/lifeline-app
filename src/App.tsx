@@ -55,6 +55,7 @@ import Events from "@/pages/events";
 import EventDetail from "@/pages/event-detail";
 import AuthCallback from "@/pages/auth-callback";
 import NotificationsPage from "@/pages/notifications";
+import RequestStatus from "@/pages/request-status";
 
 const queryClient = new QueryClient();
 
@@ -102,6 +103,8 @@ function Router() {
       <Route path="/events/:id" component={EventDetail} />
       <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/notifications" component={NotificationsPage} />
+      <Route path="/request-status" component={RequestStatus} />
+      <Route path="/request-status/:id" component={RequestStatus} />
       <Route component={NotFound} />
     </Switch>
   );

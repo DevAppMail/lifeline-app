@@ -12,6 +12,14 @@ import {
   getCommitments, updateCommitmentStatus, addPendingCelebration,
   getPendingCelebrations, removePendingCelebration, type Commitment,
 } from "@/lib/commitments";
+import {
+  getDonorAvailability, saveDonorAvailability, setAvailabilityMode,
+  isDonorAvailable, isDonorAvailableForTier, isDonorInCooldown,
+} from "@/lib/donor-availability";
+import {
+  getDonorOperationalData, transitionDonorState, getDonorStateLabel,
+} from "@/lib/donor-state";
+import type { DonorAvailabilityMode } from "@/types/fulfillment";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -370,6 +378,14 @@ export default function Donate() {
     );
   }
 
+  const donorAvail = getDonorAvailability();
+  const donorOps = getDonorOperationalData();
+  const availModes: { value: DonorAvailabilityMode; label: string; desc: string }[] = [
+    { value: "always", label: "Always Available", desc: "Receive all matching requests" },
+    { value: "emergency_only", label: "Emergency Only", desc: "Only critical requests" },
+    { value: "unavailable", label: "Unavailable", desc: "Pause all matching" },
+  ];
+
   // ── MAIN PAGE ─────────────────────────────────────────────────────────────
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background pb-24">
@@ -448,6 +464,29 @@ export default function Donate() {
               {eligibility.eligible ? "You can safely donate blood right now." : "90-day gap between donations required by medical guidelines."}
             </p>
           </div>
+        </div>
+
+        {/* ── AVAILABILITY MODE ── */}
+        <div className="bg-card border border-border rounded-2xl p-4">
+          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Matching Mode</p>
+          <div className="space-y-2">
+            {availModes.map((m) => (
+              <button key={m.value} disabled={!eligibility.eligible}
+                onClick={() => { setAvailabilityMode(m.value); }}
+                className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 text-left transition-all ${donorAvail.mode === m.value ? "border-primary bg-primary/5" : "border-border hover:border-primary/30"} ${!eligibility.eligible ? "opacity-40" : ""}`}>
+                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${donorAvail.mode === m.value ? "border-primary" : "border-muted-foreground"}`}>
+                  {donorAvail.mode === m.value && <div className="w-2.5 h-2.5 rounded-full bg-primary" />}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold text-foreground">{m.label}</p>
+                  <p className="text-xs text-muted-foreground">{m.desc}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-2 text-center">
+            State: {getDonorStateLabel(donorOps.state)}
+          </p>
         </div>
 
         {/* ── DONATION STATS ── */}
