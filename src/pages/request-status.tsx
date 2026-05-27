@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, Droplet, Heart, Clock, MapPin, Phone,
   CheckCircle2, XCircle, AlertCircle, Loader2, AlertTriangle,
-  User, Hospital, Shield, UserCheck, RefreshCw,
+  User, Hospital, Shield, UserCheck, RefreshCw, Search,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useProfile } from "@/context/profile-context";
@@ -19,7 +19,10 @@ import {
   checkAutoExpiry,
   transitionRequestStatus,
 } from "@/lib/request-store";
-import type { BloodRequestFull, RequestLifecycleStatus } from "@/types/fulfillment";
+import { getCurrentStage, getEscalationStageLabel, isEscalationActive, shouldEscalate, triggerEscalation } from "@/lib/escalation";
+import { getFulfillmentProgress } from "@/lib/donor-linking";
+import { getAuditEntriesByRequest } from "@/lib/audit-log";
+import type { BloodRequestFull, RequestLifecycleStatus, EscalationStage } from "@/types/fulfillment";
 
 const STATUS_VIEW_CONFIG: Record<RequestLifecycleStatus, { icon: React.ReactNode; label: string; color: string; badge: string; pulse: boolean }> = {
   draft:               { icon: <Clock className="w-5 h-5" />, label: "Draft", color: "text-muted-foreground", badge: "bg-muted text-muted-foreground", pulse: false },
@@ -176,11 +179,14 @@ export default function RequestStatus() {
               <ProgressRow icon={<Heart className="w-4 h-4" />} label="Units Fulfilled" value={fulfilledCount} max={request.units_needed} color="bg-emerald-500" />
             </div>
 
+            {/* Multi-donor detail */}
+            <FulfillmentDetail requestId={request.lifeline_id} unitsNeeded={request.units_needed} status={request.status} />
+
             {/* Units remaining indicator */}
             {request.status !== "fulfilled" && request.status !== "cancelled" && request.status !== "failed" && (
               <div className="mt-4 bg-primary/5 border border-primary/20 rounded-xl p-3 text-center">
                 <p className="text-sm font-semibold text-foreground">
-                  {request.units_needed - fulfilledCount} more unit{(request.units_needed - fulfilledCount) > 1 ? "s" : ""} needed
+                  {Math.max(0, request.units_needed - fulfilledCount)} more unit{Math.max(0, request.units_needed - fulfilledCount) > 1 ? "s" : ""} needed
                 </p>
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {request.donors_committed > 0
@@ -190,6 +196,11 @@ export default function RequestStatus() {
               </div>
             )}
           </div>
+
+          {/* Escalation Status */}
+          {["active", "searching", "partially_fulfilled"].includes(request.status) && (
+            <EscalationStatusCard requestId={request.lifeline_id} tier={request.tier} />
+          )}
 
           {/* Patient Info */}
           <div className="bg-card border border-border rounded-2xl p-5">
@@ -440,6 +451,84 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-sm font-semibold text-foreground truncate">{value || "—"}</p>
       </div>
+    </div>
+  );
+}
+
+// ── Sprint 2: Multi-Donor Fulfillment Detail ────────────────────────
+
+function FulfillmentDetail({ requestId, unitsNeeded, status }: { requestId: string; unitsNeeded: number; status: string }) {
+  const progress = (() => {
+    try { return getFulfillmentProgress(requestId); } catch { return null; }
+  })();
+
+  if (!progress || (progress.assigned === 0 && progress.confirmed === 0)) return null;
+
+  return (
+    <div className="mt-4 border-t border-border pt-3">
+      <p className="text-xs font-semibold text-muted-foreground mb-2">Per-Donor Status</p>
+      <div className="space-y-1.5">
+        {progress.confirmed > 0 && (
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-2 h-2 rounded-full bg-emerald-500" />
+            <span className="text-emerald-600 font-medium">{progress.confirmed} confirmed</span>
+          </div>
+        )}
+        {progress.committed > 0 && (
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-2 h-2 rounded-full bg-amber-500" />
+            <span className="text-amber-600 font-medium">{progress.committed} committed</span>
+          </div>
+        )}
+        {progress.noShows > 0 && (
+          <div className="flex items-center gap-2 text-xs">
+            <div className="w-2 h-2 rounded-full bg-red-400" />
+            <span className="text-red-500 font-medium">{progress.noShows} no-show</span>
+          </div>
+        )}
+        {progress.assigned > 0 && progress.remaining > 0 && status !== "fulfilled" && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {progress.remaining} of {unitsNeeded} units still needed
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Sprint 2: Escalation Status Card ────────────────────────────────
+
+function EscalationStatusCard({ requestId, tier }: { requestId: string; tier: string }) {
+  const stage = getCurrentStage(requestId);
+  const active = isEscalationActive(requestId);
+
+  if (!stage) return null;
+
+  const escalationCheck = shouldEscalate(requestId);
+  const stageLabel = getEscalationStageLabel(stage);
+
+  return (
+    <div className="bg-card border border-border rounded-2xl p-5">
+      <h3 className="text-sm font-bold text-foreground mb-3">Search Progress</h3>
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/30 flex items-center justify-center">
+          <Search className="w-5 h-5 text-blue-600" />
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-foreground">{stageLabel}</p>
+          <p className="text-xs text-muted-foreground">
+            {active ? "Searching within current radius" : "Search stopped"}
+          </p>
+        </div>
+      </div>
+
+      {active && escalationCheck.needsEscalation && (
+        <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-xl p-3">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+            {escalationCheck.suggestedAction}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

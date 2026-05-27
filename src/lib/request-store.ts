@@ -1,6 +1,7 @@
 // ── Blood Request State Store ───────────────────────────────────────
 // Central state management for blood requests.
-// localStorage-first with API sync for offline resilience.
+// Sprint 1: localStorage-first with API sync for offline resilience.
+// Sprint 2: audit logging, escalation init, verification, multi-donor
 
 import {
   type BloodRequestFull,
@@ -9,16 +10,14 @@ import {
   type StatusHistoryEntry,
   type DonorResponse,
   type DonorResponseState,
-  type RequestTier,
-  type BloodGroup,
+  type VerificationStatus,
   canTransition,
-  REQUEST_STATUS_LABELS,
 } from "@/types/fulfillment";
 import { generateLifelineId } from "@/lib/lifeline-id";
+import { writeAuditEntry, logRequestCreated, logStatusChanged, logError } from "@/lib/audit-log";
+import { initEscalation } from "@/lib/escalation";
 
 const STORE_KEY = "lifeline_blood_requests";
-
-// ── Helpers ─────────────────────────────────────────────────────────
 
 function readStore(): BloodRequestFull[] {
   try {
@@ -41,7 +40,6 @@ export function createRequest(data: BloodRequestCreate, requesterPhone: string, 
   const bloodGroup = data.blood_group || "O+";
   const tier = data.tier;
 
-  // Compute fulfillment deadline
   let deadline: string;
   if (tier === "emergency") {
     deadline = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString();
@@ -58,8 +56,10 @@ export function createRequest(data: BloodRequestCreate, requesterPhone: string, 
     deadline = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   }
 
+  const id = generateLifelineId();
+
   const request: BloodRequestFull = {
-    id: generateLifelineId(),
+    id,
     lifeline_id: generateLifelineId(),
 
     patient_name: data.patient_name,
@@ -74,7 +74,7 @@ export function createRequest(data: BloodRequestCreate, requesterPhone: string, 
     hospital_name: data.hospital_name,
     hospital_city: data.hospital_city,
 
-    tier: data.tier,
+    tier,
     required_date: data.required_date,
     required_time: data.required_time,
     fulfillment_deadline: deadline,
@@ -108,7 +108,16 @@ export function createRequest(data: BloodRequestCreate, requesterPhone: string, 
 
   const updated = [request, ...requests];
   writeStore(updated);
+
+  // Sprint 2: audit log
+  try { logRequestCreated(id, requesterPhone, `Tier: ${tier}, Units: ${data.units_needed}`); } catch { /* silent */ }
+
+  // Sprint 2: init escalation tracking
+  try { initEscalation(id); } catch { /* silent */ }
+
+  // Legacy API sync
   syncRequestToApi(request);
+
   return request;
 }
 
@@ -151,8 +160,10 @@ export function transitionRequestStatus(
   }
 
   const now = new Date().toISOString();
+  const previousStatus = req.status;
+
   const entry: StatusHistoryEntry = {
-    from: req.status,
+    from: previousStatus,
     to: newStatus,
     timestamp: now,
     triggered_by: triggeredBy,
@@ -175,7 +186,11 @@ export function transitionRequestStatus(
   requests[idx] = updated;
   writeStore(requests);
 
-  // Also sync to API
+  // Sprint 2: audit log
+  try {
+    logStatusChanged(id, previousStatus, newStatus, "system", triggeredBy);
+  } catch { /* silent */ }
+
   syncStatusToApi(updated, newStatus);
 
   return updated;
@@ -197,6 +212,12 @@ export function recordDonorResponse(
   const existing = req.donor_responses.findIndex((r) => r.donor_id === donorId);
   const now = new Date().toISOString();
 
+  // Sprint 2: over-fulfillment prevention
+  if (state === "confirmed" && req.units_fulfilled >= req.units_needed) {
+    console.warn(`Over-fulfillment prevented: ${requestId} already fulfilled (${req.units_fulfilled}/${req.units_needed})`);
+    return req;
+  }
+
   const response: DonorResponse = {
     request_id: requestId,
     donor_id: donorId,
@@ -217,12 +238,12 @@ export function recordDonorResponse(
     req.donor_responses.push(response);
   }
 
-  // Update counts
   req.donors_contacted = req.donor_responses.filter((r) => r.notified_at).length;
   req.donors_committed = req.donor_responses.filter((r) => r.state === "committed" || r.state === "confirmed").length;
   req.units_fulfilled = req.donor_responses.filter((r) => r.state === "confirmed").length;
 
-  // Auto-transition if all units fulfilled
+  // Auto-transition based on fulfillment
+  const prevStatus = req.status;
   if (req.units_fulfilled >= req.units_needed && req.status !== "fulfilled") {
     const historyEntry: StatusHistoryEntry = {
       from: req.status,
@@ -251,6 +272,12 @@ export function recordDonorResponse(
   req.updated_at = now;
   requests[idx] = req;
   writeStore(requests);
+
+  // Sprint 2: audit status transitions
+  if (prevStatus !== req.status) {
+    try { logStatusChanged(requestId, prevStatus, req.status, "system", `auto: donor ${state}`); } catch { /* silent */ }
+  }
+
   return req;
 }
 
@@ -264,6 +291,20 @@ export function expandRadius(id: string, newRadiusKm: number): BloodRequestFull 
   requests[idx].current_radius_km = newRadiusKm;
   requests[idx].updated_at = new Date().toISOString();
   writeStore(requests);
+
+  // Sprint 2: audit
+  try {
+    writeAuditEntry({
+      action: "radius.expanded",
+      actor_type: "system",
+      request_id: id,
+      details: `Radius expanded to ${newRadiusKm}km`,
+      new_state: String(newRadiusKm),
+      severity: "info",
+      radius_km: newRadiusKm,
+    });
+  } catch { /* silent */ }
+
   return requests[idx];
 }
 
@@ -278,7 +319,56 @@ export function incrementWave(id: string): BloodRequestFull | null {
   return requests[idx];
 }
 
-// ── API Sync ────────────────────────────────────────────────────────
+// ── Verification ────────────────────────────────────────────────────
+
+export function setVerificationStatus(
+  requestId: string,
+  status: VerificationStatus,
+  notes?: string,
+): boolean {
+  const req = getRequest(requestId);
+  if (!req) return false;
+
+  const requests = readStore();
+  const idx = requests.findIndex((r) => r.id === requestId || r.lifeline_id === requestId);
+  if (idx === -1) return false;
+
+  const now = new Date().toISOString();
+  const action = status === "flagged" ? "request.flagged" as const : "request.verified" as const;
+
+  requests[idx] = {
+    ...requests[idx],
+    updated_at: now,
+    // Store verification status as notes in audit rather than new field
+    status_history: [
+      ...requests[idx].status_history,
+      {
+        from: requests[idx].status,
+        to: requests[idx].status,
+        timestamp: now,
+        triggered_by: "system",
+        notes: `Verification: ${status}${notes ? ` — ${notes}` : ""}`,
+      },
+    ],
+  };
+
+  writeStore(requests);
+
+  try {
+    writeAuditEntry({
+      action,
+      actor_type: "system",
+      request_id: requestId,
+      new_state: status,
+      details: notes,
+      severity: status === "flagged" ? "warning" : "info",
+    });
+  } catch { /* silent */ }
+
+  return true;
+}
+
+// ── API Sync (legacy) ───────────────────────────────────────────────
 
 async function syncRequestToApi(req: BloodRequestFull): Promise<void> {
   try {
@@ -302,7 +392,7 @@ async function syncRequestToApi(req: BloodRequestFull): Promise<void> {
       }),
     });
   } catch {
-    // Silent — local state is source of truth
+    // Silent
   }
 }
 
@@ -338,7 +428,6 @@ export function checkAutoExpiry(): void {
     if (!req.fulfillment_deadline) continue;
 
     const deadline = new Date(req.fulfillment_deadline).getTime();
-    // Add 2h grace period
     if (now > deadline + 2 * 60 * 60 * 1000) {
       const newStatus: RequestLifecycleStatus = "expired";
       requests[i].status = newStatus;
@@ -351,6 +440,10 @@ export function checkAutoExpiry(): void {
         notes: "Auto-expired after deadline + grace period",
       });
       changed = true;
+
+      try {
+        logStatusChanged(req.id, req.status, newStatus, "system", "auto-expiry");
+      } catch { /* silent */ }
     }
   }
 
@@ -363,11 +456,8 @@ export function cancelRequest(id: string, reason?: string): BloodRequestFull | n
   return transitionRequestStatus(id, "cancelled", "requester", reason);
 }
 
-// ── Cancel by Id (legacy support for existing pages) ──────────────
-
 export function cancelRequestById(id: string): BloodRequestFull | null {
   return cancelRequest(id);
 }
 
-// Export for legacy compatibility
 export { generateLifelineId as genRequestId } from "@/lib/lifeline-id";

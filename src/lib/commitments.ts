@@ -1,9 +1,12 @@
 // ── Donor Commitment Store ──────────────────────────────────────────
 // LocalStorage-based donor commitment state.
-// Enhanced for Sprint 1 lifecycle integration.
+// Sprint 1: lifecycle integration, celebration queue.
+// Sprint 2: donor-linking integration, static imports.
 
 import { type BloodGroup, type RequestTier } from "@/types/fulfillment";
 import { recordDonationResult } from "@/lib/donor-state";
+import { recordDonorResponse } from "@/lib/request-store";
+import { transitionAssignmentState, createAssignment } from "@/lib/donor-linking";
 
 export interface Commitment {
   requestId: string;
@@ -26,8 +29,6 @@ const KEY = "lifeline_commitments";
 const SEEN_KEY = "lifeline_requests_seen_ids";
 const PENDING_CELEBRATION_KEY = "lifeline_pending_celebrations";
 
-// ── Read ────────────────────────────────────────────────────────────
-
 export function getCommitments(): Commitment[] {
   try {
     return JSON.parse(localStorage.getItem(KEY) ?? "[]");
@@ -40,20 +41,37 @@ export function getCommitment(requestId: string): Commitment | undefined {
   return getCommitments().find((c) => c.requestId === requestId || c.lifelineId === requestId);
 }
 
-// ── Write ───────────────────────────────────────────────────────────
-
 export function addCommitment(c: Commitment): void {
   const list = getCommitments().filter((x) => x.requestId !== c.requestId && x.lifelineId !== c.lifelineId);
   localStorage.setItem(KEY, JSON.stringify([c, ...list]));
 
-  // Also record in the request store for lifecycle tracking
+  // Sync to request-store for lifecycle tracking
   if (c.donorId) {
     try {
-      const { recordDonorResponse } = require("@/lib/request-store");
       recordDonorResponse(c.requestId, c.donorId, "committed", {
         committed_at: c.committedAt,
       });
-    } catch {}
+    } catch { /* silent */ }
+  }
+
+  // Sprint 2: create canonical donor assignment if donorId present
+  if (c.donorId) {
+    try {
+      const existingAssignments = JSON.parse(localStorage.getItem("lifeline_donor_assignments") ?? "[]");
+      const alreadyAssigned = existingAssignments.some(
+        (a: { request_id: string; donor_id: string }) =>
+          a.request_id === c.requestId && a.donor_id === c.donorId
+      );
+      if (!alreadyAssigned) {
+        createAssignment({
+          request_id: c.requestId,
+          donor_id: c.donorId,
+          donor_phone: c.donorId,
+          donor_name: c.patientFirstName,
+          blood_group: c.bloodGroup as BloodGroup,
+        });
+      }
+    } catch { /* silent */ }
   }
 }
 
@@ -75,9 +93,19 @@ export function updateCommitmentStatus(
   } else if (status === "missed") {
     recordDonationResult(false);
   }
-}
 
-// ── Seen IDs ────────────────────────────────────────────────────────
+  // Sprint 2: sync to donor linking
+  const commitment = list.find((c) => c.requestId === requestId || c.lifelineId === requestId);
+  if (commitment?.donorId) {
+    try {
+      const mappedState = status === "completed" ? "confirmed"
+        : status === "missed" ? "no_show"
+        : status === "awaiting_confirmation" ? "donated"
+        : "committed";
+      transitionAssignmentState(requestId, commitment.donorId, mappedState);
+    } catch { /* silent */ }
+  }
+}
 
 export function getSeenIds(): string[] {
   try {
@@ -92,8 +120,6 @@ export function markAsSeen(ids: string[]): void {
   const merged = Array.from(new Set([...current, ...ids]));
   localStorage.setItem(SEEN_KEY, JSON.stringify(merged));
 }
-
-// ── Pending Celebrations ────────────────────────────────────────────
 
 export function addPendingCelebration(confirmationId: number, requestId: string): void {
   const current = getPendingCelebrations();

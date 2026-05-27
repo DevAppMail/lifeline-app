@@ -1,5 +1,6 @@
 // ── LifeLine Blood Fulfillment System — Core Types ───────────────────
 // Sprint 1 — foundational operational types
+// Sprint 2 — persistence, orchestration, escalation, audit, verification
 
 // ── Tier ───────────────────────────────────────────────────────────────
 
@@ -297,4 +298,185 @@ export interface StatusHistoryEntry {
   timestamp: string;
   triggered_by?: string;
   notes?: string;
+}
+
+// ── Sprint 2: Request Verification ──────────────────────────────────
+
+export type VerificationStatus = "unverified" | "pending_review" | "verified" | "flagged";
+
+export interface VerificationRecord {
+  status: VerificationStatus;
+  doctor_note_url?: string;
+  selfie_url?: string;
+  consent_timestamp: string;
+  reviewed_by?: string;
+  reviewed_at?: string;
+  flag_reason?: string;
+  notes?: string;
+}
+
+// ── Sprint 2: Escalation ────────────────────────────────────────────
+
+export type EscalationStage = "wave_1" | "wave_2" | "wave_3" | "fallback";
+
+export interface EscalationEvent {
+  stage: EscalationStage;
+  wave_number: number;
+  radius_km: number;
+  triggered_at: string;
+  triggered_by: "system" | "requester" | "admin";
+  donor_count_contacted: number;
+  notes?: string;
+}
+
+export const ESCALATION_STAGE_LABELS: Record<EscalationStage, string> = {
+  wave_1: "Wave 1 — Initial Search",
+  wave_2: "Wave 2 — Expanded Radius",
+  wave_3: "Wave 3 — City-Wide",
+  fallback: "Fallback — Admin Escalation",
+};
+
+export const ESCALATION_RADIUS_PRESETS: Record<EscalationStage, number> = {
+  wave_1: 5,
+  wave_2: 10,
+  wave_3: 25,
+  fallback: 50,
+};
+
+export interface EscalationState {
+  current_stage: EscalationStage;
+  events: EscalationEvent[];
+  started_at: string;
+  last_escalated_at?: string;
+  cancelled_at?: string;
+  is_active: boolean;
+}
+
+// ── Sprint 2: Urban/Rural Radius Presets ────────────────────────────
+
+export type RegionType = "urban" | "semi_urban" | "rural";
+
+export const REGION_RADIUS_DEFAULTS: Record<RegionType, Record<EscalationStage, number>> = {
+  urban:     { wave_1: 5,  wave_2: 10, wave_3: 20, fallback: 40 },
+  semi_urban: { wave_1: 10, wave_2: 20, wave_3: 35, fallback: 50 },
+  rural:     { wave_1: 15, wave_2: 30, wave_3: 50, fallback: 80 },
+};
+
+// ── Sprint 2: Multi-Donor Assignment ────────────────────────────────
+
+export interface DonorAssignment {
+  request_id: string;
+  donor_id: string;
+  donor_phone: string;
+  donor_name?: string;
+  blood_group: BloodGroup;
+  units_committed: number;
+  state: DonorResponseState;
+  stage_at_assignment: EscalationStage;
+  donor_state_at_assignment: DonorOperationalState;
+  notified_at?: string;
+  responded_at?: string;
+  committed_at?: string;
+  donated_at?: string;
+  confirmed_at?: string;
+  response_latency_seconds?: number;
+  replaced_by?: string;
+  replacement_for?: string;
+  is_replacement: boolean;
+  notes?: string;
+}
+
+export interface MultiDonorState {
+  units_needed: number;
+  units_fulfilled: number;
+  assignments: DonorAssignment[];
+  replacement_queue: string[];
+  over_fulfillment_prevented: boolean;
+  fulfilled_at?: string;
+}
+
+// ── Sprint 2: Notification Event Model ──────────────────────────────
+
+export type NotificationEventType =
+  | "donor_matched"
+  | "donor_committed"
+  | "donor_confirmed"
+  | "donor_no_show"
+  | "request_fulfilled"
+  | "request_cancelled"
+  | "escalation_triggered"
+  | "replacement_needed"
+  | "deadline_approaching"
+  | "follow_up_reminder";
+
+export type NotificationChannel = "in_app" | "sms" | "whatsapp" | "email";
+export type NotificationDeliveryStatus = "queued" | "sent" | "delivered" | "failed" | "suppressed";
+
+export interface NotificationEvent {
+  id: string;
+  event_type: NotificationEventType;
+  request_id: string;
+  donor_id?: string;
+  requester_phone?: string;
+  channel: NotificationChannel;
+  priority: "low" | "normal" | "high" | "critical";
+  body: string;
+  status: NotificationDeliveryStatus;
+  queued_at: string;
+  sent_at?: string;
+  delivered_at?: string;
+  failed_at?: string;
+  failure_reason?: string;
+  suppressed_reason?: string;
+  retry_count: number;
+  max_retries: number;
+}
+
+// ── Sprint 2: Audit Log ─────────────────────────────────────────────
+
+export type AuditAction =
+  | "request.created"
+  | "request.status_changed"
+  | "request.cancelled"
+  | "request.verified"
+  | "request.flagged"
+  | "donor.notified"
+  | "donor.responded"
+  | "donor.committed"
+  | "donor.confirmed"
+  | "donor.no_show"
+  | "donor.cancelled"
+  | "donor.replaced"
+  | "escalation.triggered"
+  | "escalation.cancelled"
+  | "radius.expanded"
+  | "sync.pushed"
+  | "sync.failed"
+  | "system.expired"
+  | "system.error";
+
+export interface AuditEntry {
+  id: string;
+  timestamp: string;
+  action: AuditAction;
+  actor_type: "system" | "requester" | "donor" | "admin";
+  actor_id?: string;
+  request_id?: string;
+  donor_id?: string;
+  previous_state?: string;
+  new_state?: string;
+  details?: string;
+  severity: "info" | "warning" | "error" | "critical";
+  
+  // Escalation context
+  escalation_stage?: EscalationStage;
+  wave_number?: number;
+  radius_km?: number;
+  
+  // Actor context
+  ip_address?: string;
+  user_agent?: string;
+  
+  // Idempotency
+  correlation_id?: string;
 }

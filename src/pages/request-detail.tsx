@@ -10,6 +10,8 @@ import { useProfile } from "@/context/profile-context";
 import { addCommitment, getCommitment } from "@/lib/commitments";
 import { getRequest, recordDonorResponse } from "@/lib/request-store";
 import { isDonorAvailable, isDonorAvailableForTier, isDonorInCooldown } from "@/lib/donor-availability";
+import { getFulfillmentProgress, getActiveAssignmentsByRequest } from "@/lib/donor-linking";
+import { getAuditEntriesByRequest } from "@/lib/audit-log";
 import type { BloodGroup, RequestTier } from "@/types/fulfillment";
 
 interface BloodRequest {
@@ -357,21 +359,35 @@ export default function RequestDetail() {
           </div>
         )}
 
-        <div className="bg-card border border-border rounded-2xl p-5">
-          <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Patient</p>
-          <div className="flex items-center gap-4">
-            <div className="w-14 h-14 bg-primary/10 rounded-2xl flex flex-col items-center justify-center flex-shrink-0">
-              <Droplet className="w-4 h-4 text-primary fill-primary/50 mb-0.5" />
-              <span className="font-bold text-primary text-lg leading-none">{request.blood_group}</span>
-            </div>
-            <div>
-              <p className="text-xl font-bold text-foreground">{firstName}</p>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Needs <strong>{request.units_needed} unit{request.units_needed > 1 ? "s" : ""}</strong> of {request.blood_group}
-              </p>
-            </div>
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-3">Patient</p>
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-primary/10 rounded-2xl flex flex-col items-center justify-center flex-shrink-0">
+            <Droplet className="w-4 h-4 text-primary fill-primary/50 mb-0.5" />
+            <span className="font-bold text-primary text-lg leading-none">{request.blood_group}</span>
+          </div>
+          <div>
+            <p className="text-xl font-bold text-foreground">{firstName}</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Needs <strong>{request.units_needed} unit{request.units_needed > 1 ? "s" : ""}</strong> of {request.blood_group}
+            </p>
           </div>
         </div>
+        {(() => {
+          try {
+            const p = getFulfillmentProgress(String(request.id));
+            if (p && p.confirmed > 0) {
+              return (
+                <div className="mt-3 flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl px-3 py-2">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  {p.confirmed} donor{p.confirmed > 1 ? "s have" : " has"} confirmed · {p.remaining} remaining
+                </div>
+              );
+            }
+          } catch {}
+          return null;
+        })()}
+      </div>
 
         <div className="bg-card border border-border rounded-2xl p-4">
           <div className="flex items-center justify-between mb-2">
