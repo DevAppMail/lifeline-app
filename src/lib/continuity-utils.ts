@@ -133,6 +133,32 @@ export function timelineEventsToContinuity(
   return events.filter((e) => e.type === typeFilter);
 }
 
+export async function respondToFollowUp(
+  followUpId: string,
+  status: "accepted" | "rejected" | "rescheduled",
+  extra?: { rescheduled_date?: string; reason?: string },
+): Promise<{ success: boolean; status?: string; error?: string }> {
+  try {
+    const token = localStorage.getItem("lifeline_federated_token");
+    if (!token) return { success: false, error: "Not authenticated" };
+    const res = await fetch(`/api/app/continuity/follow-ups/${followUpId}/respond`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ status, ...extra }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Request failed" }));
+      return { success: false, error: err.error ?? "Request failed" };
+    }
+    return await res.json() as { success: boolean; status?: string; error?: string };
+  } catch {
+    return { success: false, error: "Network error" };
+  }
+}
+
 export function lineageForAppointment(
   continuity: PatientContinuity,
   appointmentId: string,

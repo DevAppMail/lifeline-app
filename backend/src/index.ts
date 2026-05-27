@@ -12,7 +12,17 @@ import { continuityRouter } from "./routes/continuity.js";
 
 const app = new Hono();
 
-app.use("*", cors());
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || "http://localhost:5000,http://localhost:3002,http://localhost:3000,http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim());
+
+app.use(
+  "*",
+  cors({
+    origin: CORS_ORIGINS,
+    credentials: true,
+  }),
+);
 app.onError(errorHandler);
 
 app.route("/api/app", healthRouter);

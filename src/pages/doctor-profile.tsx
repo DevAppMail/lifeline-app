@@ -6,6 +6,7 @@ import {
   Languages, Calendar, Clock,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
+import { toast } from "@/hooks/use-toast";
 
 type Doctor = {
   id: number; name: string; specialty: string; nmc_number: string;
@@ -32,7 +33,7 @@ function formatTime(t: string): string {
 export default function DoctorProfile() {
   const [, setLocation] = useLocation();
   const [, params] = useRoute("/doctor/:id");
-  const { profile } = useProfile();
+  const { profile, bffFetch } = useProfile();
   const [doc, setDoc] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFav, setIsFav] = useState(false);
@@ -43,35 +44,39 @@ export default function DoctorProfile() {
   useEffect(() => {
     if (isNaN(doctorId)) return;
     setLoading(true);
-    fetch(`/api/doctors/${doctorId}`)
+    bffFetch(`/api/app/doctors/${doctorId}`)
       .then(r => r.json()).then(data => { setDoc(data); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [doctorId]);
+      .catch(() => { setLoading(false); toast({ title: "Error", description: "Failed to load doctor profile", variant: "destructive" }); });
+  }, [doctorId, bffFetch]);
 
   useEffect(() => {
     if (!profile?.phone || isNaN(doctorId)) return;
-    fetch(`/api/doctors/favourites?user_phone=${encodeURIComponent(profile.phone)}`)
+    bffFetch(`/api/app/doctors/favourites?user_phone=${encodeURIComponent(profile.phone)}`)
       .then(r => r.json())
       .then((data: Doctor[]) => { if (Array.isArray(data)) setIsFav(data.some(d => d.id === doctorId)); })
       .catch(() => {});
-  }, [profile?.phone, doctorId]);
+  }, [profile?.phone, doctorId, bffFetch]);
 
   const toggleFav = async () => {
     if (!profile?.phone || !doc) return;
     setFavLoading(true);
     try {
       if (isFav) {
-        await fetch(`/api/doctors/favourites/${doc.id}?user_phone=${encodeURIComponent(profile.phone)}`, { method: "DELETE" });
+        const res = await bffFetch(`/api/app/doctors/favourites/${doc.id}?user_phone=${encodeURIComponent(profile.phone)}`, { method: "DELETE" });
+        if (!res.ok) { toast({ title: "Failed", description: "Could not remove from favourites", variant: "destructive" }); return; }
         setIsFav(false);
       } else {
-        await fetch("/api/doctors/favourites", {
+        const res = await bffFetch("/api/app/doctors/favourites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_phone: profile.phone, doctor_id: doc.id }),
         });
+        if (!res.ok) { toast({ title: "Failed", description: "Could not add to favourites", variant: "destructive" }); return; }
         setIsFav(true);
       }
-    } catch {}
+    } catch {
+      toast({ title: "Network error", description: "Could not reach server. Please try again.", variant: "destructive" });
+    }
     setFavLoading(false);
   };
 

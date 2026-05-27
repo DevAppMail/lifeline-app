@@ -109,7 +109,82 @@ export function getDefaultStaticBanners(): MergedBannerData {
   };
 }
 
-// ── Get best available banners ──────────────────────────────────────
+// ── Admin API fetch (layer 2) ─────────────────────────────────────────
+
+export async function fetchApiBanners(): Promise<MergedBannerData | null> {
+  try {
+    const res = await fetch("/api/ads/live");
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      ads?: Array<{ id: string; title: string; description: string | null; banner_url: string; cta_type: string; cta_url: string | null; is_sponsored: boolean }>;
+      default_banners?: Array<{ id: string; title: string; description: string | null; image_url: string; cta_url: string | null }>;
+    };
+    const ads = data.ads ?? [];
+    const banners = data.default_banners ?? [];
+
+    if (ads.length > 0) {
+      return {
+        banners: ads.map((a) => ({
+          id: a.id,
+          title: a.title,
+          description: a.description ?? undefined,
+          image_url: a.banner_url,
+          cta_label: a.cta_type === "register_form" ? "Register Free" : a.cta_type === "external_url" ? "Learn More" : "View",
+          cta_type: a.cta_type as "in_app_page" | "external_url" | "register_form" | undefined,
+          cta_url: a.cta_url ?? undefined,
+          is_sponsored: a.is_sponsored,
+        })),
+        source: "admin_api",
+      };
+    }
+
+    if (banners.length > 0) {
+      return {
+        banners: banners.map((b) => ({
+          id: b.id,
+          title: b.title,
+          description: b.description ?? undefined,
+          image_url: b.image_url,
+        })),
+        source: "admin_api",
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ── Get best available banners (async) ──────────────────────────────
+
+export async function getBestBannersAsync(): Promise<MergedBannerData> {
+  const localSlots = getLocalContentSlots();
+  if (localSlots.length > 0) {
+    return {
+      banners: localSlots.map((s) => ({
+        title: s.title,
+        description: s.description ?? s.subtitle,
+        image_url: s.image_url,
+        bg_gradient: s.bg_gradient,
+        icon: s.icon_name,
+        label: s.slot === "banner_hero" ? "Featured" : "Announcement",
+        cta_label: s.cta_label,
+        cta_type: s.cta_type,
+        cta_url: s.cta_url,
+        id: s.id,
+      })),
+      source: "admin_local",
+    };
+  }
+
+  const apiResult = await fetchApiBanners();
+  if (apiResult) return apiResult;
+
+  return getDefaultStaticBanners();
+}
+
+// ── Sync convenience (kept for backward compat) ─────────────────────
 
 export function getBestBanners(): MergedBannerData {
   const localSlots = getLocalContentSlots();

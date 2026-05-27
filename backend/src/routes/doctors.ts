@@ -65,3 +65,32 @@ doctorsRouter.get("/doctors/favourites", requireFederatedAuth, async (c) => {
   const data = await response.json();
   return c.json(data, response.status as 200 | 400 | 500);
 });
+
+doctorsRouter.post("/doctors/favourites", requireFederatedAuth, async (c) => {
+  const identity = c.var.identity;
+  const body = await c.req.json();
+
+  const response = await proxyToAdmin("/api/doctors/favourites", "", {
+    identity,
+    method: "POST",
+    body: JSON.stringify(body),
+    contentType: "application/json",
+  });
+
+  const data = await response.json();
+  return c.json(data, response.status as 201 | 400 | 500);
+});
+
+doctorsRouter.delete("/doctors/favourites/:doctorId", requireFederatedAuth, async (c) => {
+  const identity = c.var.identity;
+  const doctorId = c.req.param("doctorId");
+  const queryString = extractQueryString(new URL(c.req.url));
+
+  const response = await proxyToAdmin(`/api/doctors/favourites/${doctorId}`, queryString, {
+    identity,
+    method: "DELETE",
+  });
+
+  const data = await response.json();
+  return c.json(data, response.status as 200 | 400 | 500);
+});

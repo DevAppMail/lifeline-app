@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { requireFederatedAuth } from "../middleware/auth.js";
-import { queryProTable } from "../lib/pro-client.js";
+import { queryProTable, updateProTable } from "../lib/pro-client.js";
 import type { PatientContinuityDTO, AppointmentDTO, ConsultationDTO, PrescriptionDTO, FollowUpDTO, BillingDTO } from "../lib/dto.js";
 
 export const continuityRouter = new Hono();
@@ -191,6 +191,32 @@ continuityRouter.get("/continuity/follow-ups", requireFederatedAuth, async (c) =
     select: "*",
   });
   return c.json(rows);
+});
+
+continuityRouter.patch("/continuity/follow-ups/:id/respond", requireFederatedAuth, async (c) => {
+  const identity = c.var.identity;
+  const id = c.req.param("id");
+  if (!identity.pro_patient_id) {
+    return c.json({ error: "No patient record found" }, 400);
+  }
+  const body = await c.req.json() as {
+    status: "accepted" | "rejected" | "rescheduled";
+    rescheduled_date?: string;
+    reason?: string;
+  };
+  const validStatuses = ["accepted", "rejected", "rescheduled"];
+  if (!validStatuses.includes(body.status)) {
+    return c.json({ error: `Invalid status. Must be one of: ${validStatuses.join(", ")}` }, 400);
+  }
+  try {
+    const [updated] = await updateProTable("pro_follow_up_recommendations", "id", id, { status: body.status });
+    if (!updated) {
+      return c.json({ error: "Follow-up not found or update failed" }, 404);
+    }
+    return c.json({ success: true, status: body.status });
+  } catch (e) {
+    return c.json({ error: `Failed to update follow-up: ${e instanceof Error ? e.message : String(e)}` }, 500);
+  }
 });
 
 continuityRouter.get("/continuity/billing", requireFederatedAuth, async (c) => {

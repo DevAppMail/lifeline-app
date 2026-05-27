@@ -12,6 +12,7 @@ import {
   getFollowUps, addFollowUp, updateFollowUpStatus,
   addTimelineEntry, getProviders, generateId,
 } from "@/lib/health-store";
+import { respondToFollowUp } from "@/lib/continuity-utils";
 import type { FollowUpRequest, VisitType, FollowUpUrgency } from "@/types/health";
 
 const VISIT_CONFIG: Record<VisitType, { label: string; icon: React.ReactNode; color: string }> = {
@@ -50,8 +51,9 @@ export default function FollowUps() {
   useEffect(() => { setFollowUps(getFollowUps()); }, []);
   const refresh = () => setFollowUps(getFollowUps());
 
-  const handleAccept = (id: string) => {
+  const handleAccept = async (id: string) => {
     updateFollowUpStatus(id, "accepted");
+    await respondToFollowUp(id, "accepted");
     const fu = followUps.find(f => f.id === id);
     if (fu) {
       addTimelineEntry({
@@ -67,14 +69,16 @@ export default function FollowUps() {
     refresh();
   };
 
-  const handleReject = (id: string) => {
+  const handleReject = async (id: string) => {
     updateFollowUpStatus(id, "rejected");
+    await respondToFollowUp(id, "rejected");
     refresh();
   };
 
-  const handleReschedule = (id: string) => {
+  const handleReschedule = async (id: string) => {
     if (!rescheduleDate) return;
     updateFollowUpStatus(id, "rescheduled", { rescheduled_to: rescheduleDate });
+    await respondToFollowUp(id, "rescheduled", { rescheduled_date: rescheduleDate });
     addTimelineEntry({
       id: generateId(),
       type: "follow_up",

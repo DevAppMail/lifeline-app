@@ -6,6 +6,9 @@ import {
   CheckCircle2, AlertCircle, IndianRupee, ShieldCheck,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
+import { toast } from "@/hooks/use-toast";
+import { addTimelineEntry, generateId } from "@/lib/health-store";
+import type { TimelineEntry } from "@/types/health";
 
 type Doctor = {
   id: number; name: string; specialty: string; clinic_name: string | null;
@@ -140,6 +143,18 @@ export default function BookAppointment() {
       });
       if (res.ok) {
         const data = await res.json();
+
+        addTimelineEntry({
+          id: generateId(),
+          type: "appointment",
+          date: selectedDay,
+          title: `Appointment with ${doc.name}`,
+          subtitle: `${selectedSlot} — ${doc.clinic_name ?? doc.specialty}`,
+          provider: doc.name,
+          location: doc.clinic_name ?? undefined,
+          status: "scheduled",
+        } satisfies TimelineEntry);
+
         const urlParams = new URLSearchParams({
           bookingId,
           doctorId: String(doc.id),
@@ -152,8 +167,13 @@ export default function BookAppointment() {
           depositHeld: requiresDeposit ? "1" : "0",
         });
         setLocation(`/booking-confirmed?${urlParams}`);
+      } else {
+        const err = await res.json().catch(() => ({ error: "Booking failed" }));
+        toast({ title: "Booking failed", description: err.error ?? "Something went wrong", variant: "destructive" });
       }
-    } catch {}
+    } catch {
+      toast({ title: "Network error", description: "Could not reach server. Please try again.", variant: "destructive" });
+    }
     setSubmitting(false);
   };
 
