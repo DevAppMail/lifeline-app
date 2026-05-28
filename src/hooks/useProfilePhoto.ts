@@ -1,6 +1,8 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useProfile } from "@/context/profile-context";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 
+const AVATAR_BUCKET = "avatars" as const;
 const MAX_SIZE = 480;
 const JPEG_QUALITY = 0.75;
 
@@ -28,12 +30,44 @@ function compressImage(file: File): Promise<string> {
   });
 }
 
+function isDataUrl(url: string): boolean {
+  return url.startsWith("data:");
+}
+
 export function useProfilePhoto() {
   const { profile, updateProfile } = useProfile();
+  const { uploadPhoto, deletePhoto, migrateDataUrl } = usePhotoUpload();
   const [uploading, setUploading] = useState(false);
+  const [hasMigrated, setHasMigrated] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const photoUrl = profile?.profile_photo_url ?? null;
+  const storedUrl = profile?.profile_photo_url ?? null;
+  const photoUrl = storedUrl;
+
+  const getPhotoPath = useCallback(() => {
+    if (!profile?.phone) return "";
+    const uid = profile.phone;
+    return `${uid}/avatar.webp`;
+  }, [profile?.phone]);
+
+  useEffect(() => {
+    if (hasMigrated) return;
+    if (!storedUrl || !isDataUrl(storedUrl)) return;
+
+    setHasMigrated(true);
+    const path = getPhotoPath();
+    if (!path) return;
+
+    migrateDataUrl(storedUrl, AVATAR_BUCKET, path, {
+      maxWidth: MAX_SIZE,
+      quality: 0.75,
+      format: "image/webp",
+    }).then(({ publicUrl, error }) => {
+      if (!error && publicUrl) {
+        updateProfile({ profile_photo_url: publicUrl });
+      }
+    });
+  }, [storedUrl, hasMigrated, migrateDataUrl, updateProfile, getPhotoPath]);
 
   const triggerUpload = useCallback(() => {
     inputRef.current?.click();
@@ -43,17 +77,32 @@ export function useProfilePhoto() {
     if (!file.type.startsWith("image/")) return;
     setUploading(true);
     try {
-      const dataUrl = await compressImage(file);
-      updateProfile({ profile_photo_url: dataUrl });
+      const path = getPhotoPath() || `avatar_${Date.now()}.webp`;
+      const { publicUrl, error } = await uploadPhoto(file, AVATAR_BUCKET, path, {
+        maxWidth: MAX_SIZE,
+        quality: 0.75,
+        format: "image/webp",
+      });
+      if (error) {
+        const dataUrl = await compressImage(file);
+        updateProfile({ profile_photo_url: dataUrl });
+      } else if (publicUrl) {
+        updateProfile({ profile_photo_url: publicUrl });
+      }
     } catch {
       // silent
     }
     setUploading(false);
-  }, [updateProfile]);
+  }, [uploadPhoto, updateProfile, getPhotoPath]);
 
-  const removePhoto = useCallback(() => {
+  const removePhoto = useCallback(async () => {
+    const current = profile?.profile_photo_url;
+    if (current && !isDataUrl(current)) {
+      const path = getPhotoPath();
+      if (path) await deletePhoto(AVATAR_BUCKET, path);
+    }
     updateProfile({ profile_photo_url: undefined });
-  }, [updateProfile]);
+  }, [profile?.profile_photo_url, deletePhoto, updateProfile, getPhotoPath]);
 
   const onChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
