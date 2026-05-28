@@ -9,6 +9,7 @@ import {
 import { useProfile } from "@/context/profile-context";
 import { getTimeline, getProviders, getPendingFollowUps, getCareCircle } from "@/lib/health-store";
 import type { EmergencyContact } from "@/types/health";
+import { BottomNav } from "@/components/bottom-nav";
 
 function calcEligibility(lastDonationDate?: string) {
   if (!lastDonationDate) return { eligible: true, daysRemaining: 0, nextDate: "" };
@@ -419,22 +420,7 @@ export default function Health() {
 
       </div>
 
-      {/* Bottom Nav */}
-      <nav className="fixed bottom-0 w-full max-w-[430px] bg-card/95 backdrop-blur-md border-t border-border flex justify-around py-3 pb-safe z-50">
-        <Link href="/home" className="flex flex-col items-center gap-1 text-muted-foreground">
-          <Heart className="w-5 h-5" /><span className="text-[10px] font-medium">Home</span>
-        </Link>
-        <Link href="/donate" className="flex flex-col items-center gap-1 text-muted-foreground">
-          <Droplet className="w-5 h-5" /><span className="text-[10px] font-medium">Donate</span>
-        </Link>
-        <Link href="/requests" className="flex flex-col items-center gap-1 text-muted-foreground">
-          <Activity className="w-5 h-5" /><span className="text-[10px] font-medium">Requests</span>
-        </Link>
-        <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground">
-          <User className="w-5 h-5" /><span className="text-[10px] font-medium">Profile</span>
-        </Link>
-      </nav>
-      <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
+      <BottomNav />
     </div>
   );
 }
