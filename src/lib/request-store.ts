@@ -15,7 +15,6 @@ import {
 } from "@/types/fulfillment";
 import { generateLifelineId } from "@/lib/lifeline-id";
 import { writeAuditEntry, logRequestCreated, logStatusChanged, logDonorResponded, logError } from "@/lib/audit-log";
-import { initEscalation } from "@/lib/escalation";
 
 const STORE_KEY = "lifeline_blood_requests";
 
@@ -33,7 +32,7 @@ function writeStore(requests: BloodRequestFull[]): void {
 
 // ── Create ──────────────────────────────────────────────────────────
 
-export function createRequest(data: BloodRequestCreate, requesterPhone: string, requesterName?: string): BloodRequestFull {
+export async function createRequest(data: BloodRequestCreate, requesterPhone: string, requesterName?: string): Promise<BloodRequestFull> {
   const requests = readStore();
   const now = new Date().toISOString();
 
@@ -112,8 +111,8 @@ export function createRequest(data: BloodRequestCreate, requesterPhone: string, 
   // Sprint 2: audit log
   try { logRequestCreated(id, requesterPhone, `Tier: ${tier}, Units: ${data.units_needed}`); } catch { /* silent */ }
 
-  // Sprint 2: init escalation tracking
-  try { initEscalation(id); } catch { /* silent */ }
+  // Sprint 2: init escalation tracking (lazy import to avoid circular dep)
+  try { const { initEscalation } = await import("@/lib/escalation"); initEscalation(id); } catch { /* silent */ }
 
   // Legacy API sync
   syncRequestToApi(request);

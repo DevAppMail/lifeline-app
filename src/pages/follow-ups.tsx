@@ -310,8 +310,8 @@ export default function FollowUps() {
           ) : (
             <div className="space-y-3">
               {pending.map(fu => {
-                const visit = VISIT_CONFIG[fu.visit_type];
-                const urgency = URGENCY_CONFIG[fu.urgency];
+                const visit = VISIT_CONFIG[fu.visit_type] ?? VISIT_CONFIG.clinic;
+                const urgency = URGENCY_CONFIG[fu.urgency] ?? URGENCY_CONFIG.routine;
                 return (
                   <motion.div key={fu.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                     className="bg-card border border-border rounded-2xl p-4 shadow-sm">
@@ -407,7 +407,7 @@ export default function FollowUps() {
           ) : (
             <div className="space-y-3">
               {upcoming.map((fu, i) => {
-                const visit = VISIT_CONFIG[fu.visit_type];
+                const visit = VISIT_CONFIG[fu.visit_type] ?? VISIT_CONFIG.clinic;
                 const isOverdue = fu.recommended_date && new Date(fu.recommended_date) < new Date();
                 const daysUntil = fu.recommended_date ? Math.round((new Date(fu.recommended_date).getTime() - Date.now()) / 86400000) : null;
                 return (

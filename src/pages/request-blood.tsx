@@ -904,7 +904,7 @@ export default function RequestBlood() {
 
     // Create local lifecycle-managed request for request-status tracking
     try {
-      createRequest(
+      await createRequest(
         {
           patient_name: patientName,
           relationship,

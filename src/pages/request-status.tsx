@@ -104,7 +104,7 @@ export default function RequestStatus() {
 
   // ── Single Request View ──────────────────────────────────────────
   if (requestId && request) {
-    const cfg = STATUS_VIEW_CONFIG[request.status];
+    const cfg = STATUS_VIEW_CONFIG[request.status] ?? STATUS_VIEW_CONFIG.active;
     const fulfilledCount = request.units_fulfilled;
     const showCancel = ["active", "searching", "partially_fulfilled"].includes(request.status);
 
@@ -341,7 +341,7 @@ export default function RequestStatus() {
           allRequests
             .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
             .map((req) => {
-              const cfg = STATUS_VIEW_CONFIG[req.status];
+              const cfg = STATUS_VIEW_CONFIG[req.status] ?? STATUS_VIEW_CONFIG.active;
               return (
                 <motion.button
                   key={req.id}

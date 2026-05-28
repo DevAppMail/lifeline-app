@@ -91,14 +91,16 @@ export default function RequestDetail() {
   const countdown = useCountdown(request?.required_date, request?.required_time);
 
   useEffect(() => {
-    if (!profile) { setLocation("/login"); return; }
-    if (isNaN(id)) { setLocation("/requests"); return; }
+    if (!profile) { setLoading(false); setLocation("/login"); return; }
+    if (isNaN(id)) { setLoading(false); setLocation("/requests"); return; }
 
     (async () => {
       try {
         const res = await fetch(`/api/blood-requests/${id}`);
         if (!res.ok) throw new Error();
-        const data: BloodRequest = await res.json();
+        const data: BloodRequest | null = await res.json().catch(() => null);
+        if (!data) { setLoading(false); setLocation("/requests"); return; }
+        setRequest(data);
         setRequest(data);
 
         // Check existing commitment
@@ -176,8 +178,8 @@ export default function RequestDetail() {
   if (!request) return null;
 
   const meta = TIER_META[request.request_tier] ?? TIER_META.normal;
-  const firstName = request.patient_name.split(" ")[0];
-  const confirmedDonors = Math.floor(Math.random() * Math.min(request.units_needed, 2));
+  const firstName = request.patient_name?.split(" ")[0] ?? "Patient";
+  const confirmedDonors = Math.floor(Math.random() * Math.min(request.units_needed ?? 1, 2));
   const isCritical = request.request_tier === "critical";
   const tierLabel = request.request_tier === "critical" ? "emergency" : request.request_tier === "urgent" ? "urgent" : "scheduled";
   const donorAvail = isDonorAvailableForTier(tierLabel as RequestTier);

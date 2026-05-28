@@ -530,7 +530,7 @@ export default function Home() {
 
   const requestsBadge = useRequestsBadge(profile?.bloodGroup ?? "");
   const { data: continuity, loading: continuityLoading } = useContinuity({ enabled: true });
-  const { unreadCount: reminderCount } = useReminders(continuity);
+  const { unreadCount: reminderCount = 0 } = useReminders(continuity) ?? {};
 
   if (isLoading || !profile) return null;
 
@@ -611,7 +611,7 @@ export default function Home() {
         </div>
       </div>
 
-      <CommitmentStrip />
+      {typeof CommitmentStrip === "function" && <CommitmentStrip />}
 
       <div className="flex-1 overflow-y-auto">
         <div className="px-5 pt-5 space-y-6">
