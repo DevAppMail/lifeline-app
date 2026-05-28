@@ -3,9 +3,10 @@ import { useLocation, useRoute } from "wouter";
 import { motion } from "framer-motion";
 import {
   ChevronLeft, CheckCircle2, MapPin, Star, Heart,
-  Languages, Calendar, Clock,
+  Languages, Calendar, Clock, Camera, Image as ImageIcon,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { toast } from "@/hooks/use-toast";
 
 type Doctor = {
@@ -14,6 +15,8 @@ type Doctor = {
   city: string | null; consultation_fee: number | null; rating: number | null;
   review_count: number | null; languages: string | null; about: string | null;
   available_days: string | null; available_start_time: string | null; available_end_time: string | null;
+  photo_url?: string | null;
+  clinic_photos?: string[] | null;
 };
 
 const ALL_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -121,8 +124,15 @@ export default function DoctorProfile() {
         <div className="px-4 space-y-5">
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
             className="flex flex-col items-center text-center pt-2 pb-4">
-            <div className="w-24 h-24 rounded-3xl bg-primary/10 flex items-center justify-center mb-4 shadow-sm">
-              <span className="text-primary font-bold text-3xl">{initials(doc.name)}</span>
+            <div className="mb-4">
+              <Avatar className="w-24 h-24 rounded-3xl shadow-sm mx-auto border-2 border-border/50">
+                {doc.photo_url ? (
+                  <AvatarImage src={doc.photo_url} alt={doc.name} className="object-cover" />
+                ) : null}
+                <AvatarFallback className="rounded-3xl bg-primary/10 text-primary font-bold text-3xl">
+                  {initials(doc.name)}
+                </AvatarFallback>
+              </Avatar>
             </div>
             <h1 className="text-xl font-bold text-foreground leading-tight">{doc.name}</h1>
             <p className="text-muted-foreground text-sm mt-1">{doc.specialty}</p>
@@ -165,6 +175,22 @@ export default function DoctorProfile() {
                   className="flex-shrink-0 px-3 py-1.5 bg-primary/10 text-primary rounded-full text-xs font-semibold hover:bg-primary/20 transition-colors">
                   Maps
                 </a>
+              </div>
+            </motion.div>
+          )}
+
+          {doc.clinic_photos && doc.clinic_photos.length > 0 && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.07 }}
+              className="bg-card border border-border rounded-2xl p-4">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Clinic Photos</h3>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+                {doc.clinic_photos.map((url, i) => (
+                  <div key={i} className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden border border-border/50 bg-muted/30">
+                    <img src={url} alt={`Clinic photo ${i + 1}`}
+                      className="w-full h-full object-cover"
+                      loading="lazy" />
+                  </div>
+                ))}
               </div>
             </motion.div>
           )}
