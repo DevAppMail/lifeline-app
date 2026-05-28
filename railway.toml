@@ -1,0 +1,15 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm ci && npm run build"
+
+[deploy]
+startCommand = "npm run preview -- --port $PORT"
+healthcheckPath = "/"
+healthcheckTimeout = 30
+
+[service]
+name = "lifeline-app"
+
+[[service.ports]]
+port = 5000
+protocol = "http"

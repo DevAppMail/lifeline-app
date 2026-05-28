@@ -31,6 +31,11 @@ app.route("/api/app", doctorsRouter);
 app.route("/api/app", appointmentsRouter);
 app.route("/api/app", continuityRouter);
 
+if (!config.jwtSecret || !config.adminBffApiKey) {
+  console.error("[BFF] FATAL: JWT_SECRET and ADMIN_BFF_API_KEY must be set in production");
+  process.exit(1);
+}
+
 console.log(
   `[BFF] lifeline-app-bff starting on port ${config.port} (${config.nodeEnv})`,
 );

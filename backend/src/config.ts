@@ -6,11 +6,11 @@ export const config = {
   supabaseAnonKey: process.env.VITE_SUPABASE_ANON_KEY || "",
 
   adminApiUrl: process.env.ADMIN_API_URL || "http://localhost:3000",
-  adminBffApiKey: process.env.ADMIN_BFF_API_KEY || "bff-dev-key",
+  adminBffApiKey: process.env.ADMIN_BFF_API_KEY || "",
 
   proSupabaseUrl: process.env.PRO_SUPABASE_URL || "",
   proSupabaseServiceKey: process.env.PRO_SUPABASE_SERVICE_KEY || "",
 
-  jwtSecret: process.env.JWT_SECRET || "dev-jwt-secret-do-not-use-in-production",
+  jwtSecret: process.env.JWT_SECRET || "",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "24h",
 };
