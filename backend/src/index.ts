@@ -9,6 +9,7 @@ import { identityRouter } from "./routes/identity.js";
 import { doctorsRouter } from "./routes/doctors.js";
 import { appointmentsRouter } from "./routes/appointments.js";
 import { continuityRouter } from "./routes/continuity.js";
+import { registerRouter } from "./routes/register.js";
 
 const app = new Hono();
 
@@ -30,6 +31,7 @@ app.route("/api/app", identityRouter);
 app.route("/api/app", doctorsRouter);
 app.route("/api/app", appointmentsRouter);
 app.route("/api/app", continuityRouter);
+app.route("/api/app", registerRouter);
 
 if (!config.jwtSecret || !config.adminBffApiKey) {
   console.error("[BFF] FATAL: JWT_SECRET and ADMIN_BFF_API_KEY must be set in production");

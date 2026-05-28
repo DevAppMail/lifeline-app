@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowRight, ChevronLeft, Droplet, Info, HelpCircle, CheckCircle2 } from "lucide-react";
@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useProfile, BloodGroup } from "@/context/profile-context";
+import { supabase } from "@/lib/supabase";
 
 const BLOOD_GROUPS: BloodGroup[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -14,7 +15,8 @@ const YEARS = Array.from({ length: 10 }, (_, i) => String(new Date().getFullYear
 
 export default function Onboarding() {
   const [, setLocation] = useLocation();
-  const { setProfile } = useProfile();
+  const { setProfile, updateProfile } = useProfile();
+  const [registering, setRegistering] = useState(false);
 
   const [step, setStep] = useState(1);
 
@@ -72,8 +74,29 @@ export default function Onboarding() {
     lastDonationDate: skipBlood ? undefined : getLastDonationDate(),
   });
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
+    setRegistering(true);
     setProfile(buildProfile());
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) {
+        await fetch("/api/app/users/register", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Supabase-Auth": session.access_token,
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            phone: session.user?.phone || "",
+            email: session.user?.email || "",
+            blood_group: bloodGroup || "",
+            city: city.trim(),
+          }),
+        });
+      }
+    } catch { /* registration is best-effort — profile is saved locally */ }
+    setRegistering(false);
     setLocation("/home");
   };
 
@@ -258,8 +281,8 @@ export default function Onboarding() {
               </div>
 
               <div className="pt-6 space-y-3">
-                <Button onClick={handleComplete} disabled={!isStep2Valid} className="w-full h-13 text-base font-semibold rounded-xl">
-                  All Done — Go to Home
+                <Button onClick={handleComplete} disabled={!isStep2Valid || registering} className="w-full h-13 text-base font-semibold rounded-xl">
+                  {registering ? "Setting up…" : "All Done — Go to Home"}
                 </Button>
                 <button onClick={handleSkip} className="w-full py-2 text-sm text-muted-foreground hover:text-foreground transition-colors text-center">
                   Skip for now — I'm only here for doctor appointments
