@@ -150,6 +150,7 @@ export default function Login() {
   };
 
   const handleDevLogin = async () => {
+    if (import.meta.env.VITE_APP_MODE === 'production') return;
     localStorage.setItem("lifeline_dev_bypass", "true");
     localStorage.setItem("lifeline_profile", JSON.stringify({
       phone: "919000000000",
@@ -311,6 +312,7 @@ export default function Login() {
                   By continuing, you agree to LifeLine's Terms &amp; Privacy Policy
                 </p>
 
+                {import.meta.env.VITE_APP_MODE !== 'production' && (
                 <div className="flex justify-center pt-1">
                   <button
                     onClick={handleDevLogin}
@@ -319,6 +321,7 @@ export default function Login() {
                     Dev Login (Test Mode)
                   </button>
                 </div>
+                )}
               </motion.div>
             )}
 

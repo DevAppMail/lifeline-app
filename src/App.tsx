@@ -67,7 +67,7 @@ function AuthGuard({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useProfile();
   const [location, navigate] = useLocation();
 
-  const DEV_BYPASS = localStorage.getItem("lifeline_dev_bypass") === "true";
+  const DEV_BYPASS = import.meta.env.VITE_APP_MODE !== 'production' && localStorage.getItem("lifeline_dev_bypass") === "true";
 
   if (DEV_BYPASS) return <>{children}</>;
   if (isLoading) return null;
