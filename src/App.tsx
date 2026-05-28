@@ -56,6 +56,7 @@ import EventDetail from "@/pages/event-detail";
 import AuthCallback from "@/pages/auth-callback";
 import NotificationsPage from "@/pages/notifications";
 import RequestStatus from "@/pages/request-status";
+import VoluntaryDonation from "@/pages/voluntary-donation";
 
 const queryClient = new QueryClient();
 
@@ -105,6 +106,7 @@ function Router() {
       <Route path="/notifications" component={NotificationsPage} />
       <Route path="/request-status" component={RequestStatus} />
       <Route path="/request-status/:id" component={RequestStatus} />
+      <Route path="/voluntary-donation" component={VoluntaryDonation} />
       <Route component={NotFound} />
     </Switch>
   );

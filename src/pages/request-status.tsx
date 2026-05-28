@@ -20,7 +20,8 @@ import {
   transitionRequestStatus,
 } from "@/lib/request-store";
 import { getCurrentStage, getEscalationStageLabel, isEscalationActive, shouldEscalate, triggerEscalation } from "@/lib/escalation";
-import { getFulfillmentProgress } from "@/lib/donor-linking";
+import { getFulfillmentProgress, getProgressSummary } from "@/lib/fulfillment-progression";
+import { FulfillmentProgressCard, LegalOperationalNote } from "@/components/fulfillment-progress-card";
 import { getAuditEntriesByRequest } from "@/lib/audit-log";
 import type { BloodRequestFull, RequestLifecycleStatus, EscalationStage } from "@/types/fulfillment";
 
@@ -169,33 +170,15 @@ export default function RequestStatus() {
             )}
           </motion.div>
 
-          {/* Donor Progress */}
-          <div className="bg-card border border-border rounded-2xl p-5">
-            <h3 className="text-sm font-bold text-foreground mb-4">Donor Progress</h3>
+          {/* Fulfillment Progress */}
+          {(() => {
+            const donorProgress = getFulfillmentProgress(request.lifeline_id);
+            const summary = getProgressSummary(request.units_needed, donorProgress);
+            return <FulfillmentProgressCard progress={summary} />;
+          })()}
 
-            <div className="space-y-3">
-              <ProgressRow icon={<User className="w-4 h-4" />} label="Donors Contacted" value={request.donors_contacted} max={20} color="bg-blue-500" />
-              <ProgressRow icon={<CheckCircle2 className="w-4 h-4" />} label="Donors Committed" value={request.donors_committed} max={request.units_needed} color="bg-amber-500" />
-              <ProgressRow icon={<Heart className="w-4 h-4" />} label="Units Fulfilled" value={fulfilledCount} max={request.units_needed} color="bg-emerald-500" />
-            </div>
-
-            {/* Multi-donor detail */}
-            <FulfillmentDetail requestId={request.lifeline_id} unitsNeeded={request.units_needed} status={request.status} />
-
-            {/* Units remaining indicator */}
-            {request.status !== "fulfilled" && request.status !== "cancelled" && request.status !== "failed" && (
-              <div className="mt-4 bg-primary/5 border border-primary/20 rounded-xl p-3 text-center">
-                <p className="text-sm font-semibold text-foreground">
-                  {Math.max(0, request.units_needed - fulfilledCount)} more unit{Math.max(0, request.units_needed - fulfilledCount) > 1 ? "s" : ""} needed
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {request.donors_committed > 0
-                    ? "Donors have committed — they will arrive at the hospital"
-                    : "We are notifying eligible donors in your area"}
-                </p>
-              </div>
-            )}
-          </div>
+          {/* Legal + Operational Note */}
+          <LegalOperationalNote />
 
           {/* Escalation Status */}
           {["active", "searching", "partially_fulfilled"].includes(request.status) && (
@@ -450,47 +433,6 @@ function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string;
       <div className="flex-1 min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
         <p className="text-sm font-semibold text-foreground truncate">{value || "—"}</p>
-      </div>
-    </div>
-  );
-}
-
-// ── Sprint 2: Multi-Donor Fulfillment Detail ────────────────────────
-
-function FulfillmentDetail({ requestId, unitsNeeded, status }: { requestId: string; unitsNeeded: number; status: string }) {
-  const progress = (() => {
-    try { return getFulfillmentProgress(requestId); } catch { return null; }
-  })();
-
-  if (!progress || (progress.assigned === 0 && progress.confirmed === 0)) return null;
-
-  return (
-    <div className="mt-4 border-t border-border pt-3">
-      <p className="text-xs font-semibold text-muted-foreground mb-2">Per-Donor Status</p>
-      <div className="space-y-1.5">
-        {progress.confirmed > 0 && (
-          <div className="flex items-center gap-2 text-xs">
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-emerald-600 font-medium">{progress.confirmed} confirmed</span>
-          </div>
-        )}
-        {progress.committed > 0 && (
-          <div className="flex items-center gap-2 text-xs">
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
-            <span className="text-amber-600 font-medium">{progress.committed} committed</span>
-          </div>
-        )}
-        {progress.noShows > 0 && (
-          <div className="flex items-center gap-2 text-xs">
-            <div className="w-2 h-2 rounded-full bg-red-400" />
-            <span className="text-red-500 font-medium">{progress.noShows} no-show</span>
-          </div>
-        )}
-        {progress.assigned > 0 && progress.remaining > 0 && status !== "fulfilled" && (
-          <p className="text-xs text-muted-foreground mt-1">
-            {progress.remaining} of {unitsNeeded} units still needed
-          </p>
-        )}
       </div>
     </div>
   );

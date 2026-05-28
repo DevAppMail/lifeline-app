@@ -17,6 +17,7 @@
     "@supabase/supabase-js": "^2.49.0",
     "@tailwindcss/typography": "^0.5.19",
     "express": "^5.2.1",
+    "html-to-image": "^1.11.13",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   },

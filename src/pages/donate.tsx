@@ -542,6 +542,31 @@ export default function Donate() {
           </div>
         )}
 
+        {/* ── Record Independent Donation ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-primary/5 to-card border border-primary/20 rounded-2xl p-5"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Heart className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-foreground">Donated somewhere else?</p>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+                Record donations at blood camps, NGOs, or other voluntary drives.
+              </p>
+              <button
+                onClick={() => setLocation("/voluntary-donation")}
+                className="mt-3 h-9 px-4 bg-primary/10 text-primary text-xs font-bold rounded-xl hover:bg-primary/20 transition-colors"
+              >
+                I Donated Blood
+              </button>
+            </div>
+          </div>
+        </motion.div>
+
         {/* ── DONATION STATS ── */}
         <div className="bg-card border border-border rounded-2xl p-5">
           <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mb-4">Donation Summary</p>
