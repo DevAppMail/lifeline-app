@@ -153,9 +153,16 @@ export default function HealthTimeline() {
     refresh();
   };
 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   const handleRemove = (id: string) => {
-    removeTimelineEntry(id);
-    refresh();
+    if (confirmDeleteId === id) {
+      removeTimelineEntry(id);
+      refresh();
+      setConfirmDeleteId(null);
+    } else {
+      setConfirmDeleteId(id);
+    }
   };
 
   const visible = viewMode === "local" ? entries : mergedEntries;
@@ -299,10 +306,19 @@ export default function HealthTimeline() {
                               )}
                             </div>
                             {entry.type === "health_note" && (
-                              <button onClick={() => handleRemove(entry.id)}
-                                className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0">
-                                <X className="w-3.5 h-3.5" />
-                              </button>
+                              confirmDeleteId === entry.id ? (
+                                <div className="flex items-center gap-1.5 flex-shrink-0">
+                                  <button onClick={() => handleRemove(entry.id)}
+                                    className="text-[10px] font-bold text-destructive underline">Delete</button>
+                                  <button onClick={() => setConfirmDeleteId(null)}
+                                    className="text-[10px] text-muted-foreground underline">Keep</button>
+                                </div>
+                              ) : (
+                                <button onClick={() => handleRemove(entry.id)}
+                                  className="w-7 h-7 flex items-center justify-center rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors flex-shrink-0">
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              )
                             )}
                           </div>
                         </div>

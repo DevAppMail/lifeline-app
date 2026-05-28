@@ -500,7 +500,6 @@ export default function Requests() {
         <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground"><Bell className="w-5 h-5" /><span className="text-[10px] font-medium">Notifications</span></Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground"><User className="w-5 h-5" /><span className="text-[10px] font-medium">Profile</span></Link>
       </nav>
-      <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
     </div>
   );
 }

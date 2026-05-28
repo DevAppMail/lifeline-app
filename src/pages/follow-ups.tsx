@@ -5,7 +5,7 @@ import {
   ChevronLeft, Heart, Droplet, Activity, User,
   Bell, CheckCircle2, XCircle, CalendarClock, Home, Stethoscope,
   Video, Clock, AlertTriangle, RotateCcw, Plus, X, Check,
-  RefreshCw, AlertCircle, Info,
+  RefreshCw, AlertCircle, Info, Loader2,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import {
@@ -54,6 +54,7 @@ export default function FollowUps() {
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [addingReminder, setAddingReminder] = useState(false);
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   // New reminder form state
   const [rProvider, setRProvider] = useState("");
@@ -69,27 +70,39 @@ export default function FollowUps() {
   const refresh = () => setFollowUps(getFollowUps());
 
   const handleAccept = async (id: string) => {
-    updateFollowUpStatus(id, "accepted");
-    await respondToFollowUp(id, "accepted");
-    const fu = followUps.find(f => f.id === id);
-    if (fu) {
-      addTimelineEntry({
-        id: generateId(),
-        type: "follow_up",
-        date: fu.recommended_date ?? new Date().toISOString(),
-        title: `Follow-up: ${fu.reason}`,
-        subtitle: fu.recommended_date ? new Date(fu.recommended_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : undefined,
-        provider: fu.provider_name,
-        status: "scheduled",
-      });
+    if (actionLoadingId) return;
+    setActionLoadingId(id);
+    try {
+      updateFollowUpStatus(id, "accepted");
+      await respondToFollowUp(id, "accepted");
+      const fu = followUps.find(f => f.id === id);
+      if (fu) {
+        addTimelineEntry({
+          id: generateId(),
+          type: "follow_up",
+          date: fu.recommended_date ?? new Date().toISOString(),
+          title: `Follow-up: ${fu.reason}`,
+          subtitle: fu.recommended_date ? new Date(fu.recommended_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : undefined,
+          provider: fu.provider_name,
+          status: "scheduled",
+        });
+      }
+      refresh();
+    } finally {
+      setActionLoadingId(null);
     }
-    refresh();
   };
 
   const handleReject = async (id: string) => {
-    updateFollowUpStatus(id, "rejected");
-    await respondToFollowUp(id, "rejected");
-    refresh();
+    if (actionLoadingId) return;
+    setActionLoadingId(id);
+    try {
+      updateFollowUpStatus(id, "rejected");
+      await respondToFollowUp(id, "rejected");
+      refresh();
+    } finally {
+      setActionLoadingId(null);
+    }
   };
 
   const handleReschedule = async (id: string) => {
@@ -373,16 +386,18 @@ export default function FollowUps() {
                         <motion.div key="actions" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                           className="flex gap-2">
                           <button onClick={() => handleAccept(fu.id)}
-                            className="flex-1 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Accept
+                            disabled={actionLoadingId === fu.id}
+                            className="flex-1 py-2.5 bg-emerald-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                            {actionLoadingId === fu.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />} Accept
                           </button>
                           <button onClick={() => { setReschedulingId(fu.id); setRescheduleDate(""); }}
                             className="flex-1 py-2.5 border border-primary/30 text-primary text-xs font-bold rounded-xl flex items-center justify-center gap-1.5">
                             <RotateCcw className="w-3.5 h-3.5" /> Reschedule
                           </button>
                           <button onClick={() => handleReject(fu.id)}
-                            className="py-2.5 px-3 border border-border text-muted-foreground text-xs font-bold rounded-xl flex items-center justify-center">
-                            <XCircle className="w-4 h-4" />
+                            disabled={actionLoadingId === fu.id}
+                            className="py-2.5 px-3 border border-border text-muted-foreground text-xs font-bold rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                            {actionLoadingId === fu.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                           </button>
                         </motion.div>
                       )}

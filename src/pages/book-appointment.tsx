@@ -252,7 +252,7 @@ export default function BookAppointment() {
                     const avail = isDayAvailable(day);
                     const selected = selectedDay === formatDate(day);
                     return (
-                      <button key={idx}
+                      <button key={formatDate(day)}
                         disabled={!avail}
                         onPointerDown={() => { setSelectedDay(formatDate(day)); setSelectedSlot(null); }}
                         className={`flex-shrink-0 w-16 rounded-2xl py-4 flex flex-col items-center gap-1.5 border transition-all ${

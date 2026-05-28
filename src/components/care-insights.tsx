@@ -59,8 +59,8 @@ export function CareInsightsWidget({ limit = 2 }: { limit?: number }) {
         )}
       </div>
       <div className="space-y-2.5">
-        {visible.map((insight, i) => (
-          <InsightCard key={`${insight.type}-${i}`} insight={insight} />
+        {visible.map((insight) => (
+          <InsightCard key={`${insight.type}-${insight.timestamp}`} insight={insight} />
         ))}
       </div>
     </section>

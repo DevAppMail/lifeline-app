@@ -184,9 +184,9 @@ export default function DoctorProfile() {
               className="bg-card border border-border rounded-2xl p-4">
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Clinic Photos</h3>
               <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-                {doc.clinic_photos.map((url, i) => (
-                  <div key={i} className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden border border-border/50 bg-muted/30">
-                    <img src={url} alt={`Clinic photo ${i + 1}`}
+                {doc.clinic_photos.map((url) => (
+                  <div key={url} className="flex-shrink-0 w-28 h-28 rounded-xl overflow-hidden border border-border/50 bg-muted/30">
+                    <img src={url} alt="Clinic photo"
                       className="w-full h-full object-cover"
                       loading="lazy" />
                   </div>

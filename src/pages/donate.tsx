@@ -5,7 +5,7 @@ import {
   ChevronLeft, Heart, Droplet, Activity, User, Bell,
   Trophy, Star, Clock, Flame, TrendingUp, Sparkles,
   CheckCircle2, XCircle, Share2, Calendar, Timer,
-  Pill, FlaskConical, AlertCircle,
+  Pill, FlaskConical, AlertCircle, Loader2,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import {
@@ -148,8 +148,11 @@ export default function Donate() {
   }, []);
 
   // Mark as donated → awaiting confirmation
+  const [confirming, setConfirming] = useState(false);
+
   const handleConfirmDonated = useCallback(async () => {
-    if (!activeCommitment || !profile) return;
+    if (!activeCommitment || !profile || confirming) return;
+    setConfirming(true);
 
     // Need requester info — fetch blood request to get requester_id
     let requesterUserId = activeCommitment.requesterUserId ?? 0;
@@ -210,8 +213,9 @@ export default function Donate() {
     }
 
     setCommitments(getCommitments());
+    setConfirming(false);
     setPostState("awaiting");
-  }, [activeCommitment, profile, donorRecord]);
+  }, [activeCommitment, profile, donorRecord, confirming]);
 
   // Missed
   const handleMissed = useCallback(() => {
@@ -337,8 +341,8 @@ export default function Donate() {
             Did you complete your donation at <strong className="text-foreground">{activeCommitment.hospitalName}</strong>?
           </p>
           <div className="space-y-3">
-            <button onClick={handleConfirmDonated} className="w-full h-13 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2">
-              <CheckCircle2 className="w-5 h-5" /> Yes, I Donated
+            <button onClick={handleConfirmDonated} disabled={confirming} className="w-full h-13 bg-primary text-white rounded-xl font-bold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              {confirming ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />} {confirming ? "Confirming..." : "Yes, I Donated"}
             </button>
             <button onClick={handleMissed} className="w-full h-12 border-2 border-border text-muted-foreground rounded-xl font-semibold flex items-center justify-center gap-2">
               <XCircle className="w-5 h-5" /> No, I Could Not Make It
@@ -683,7 +687,6 @@ export default function Donate() {
         <Link href="/notifications" className="flex flex-col items-center gap-1 text-muted-foreground"><Bell className="w-5 h-5" /><span className="text-[10px] font-medium">Notifications</span></Link>
         <Link href="/profile" className="flex flex-col items-center gap-1 text-muted-foreground"><User className="w-5 h-5" /><span className="text-[10px] font-medium">Profile</span></Link>
       </nav>
-      <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
     </div>
   );
 }

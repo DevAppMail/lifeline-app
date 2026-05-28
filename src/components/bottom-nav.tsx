@@ -58,7 +58,6 @@ export function BottomNav() {
           );
         })}
       </nav>
-      <style>{`.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }`}</style>
     </>
   );
 }

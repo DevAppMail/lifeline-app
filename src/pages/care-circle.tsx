@@ -45,6 +45,7 @@ export default function CareCircle() {
   const [members, setMembers] = useState<CareCircleMember[]>([]);
   const [adding, setAdding] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
 
   // Form state
   const [fName, setFName] = useState("");
@@ -82,9 +83,14 @@ export default function CareCircle() {
   };
 
   const handleRemove = (id: string) => {
-    removeCareCircleMember(id);
-    refresh();
-    if (expandedId === id) setExpandedId(null);
+    if (confirmRemoveId === id) {
+      removeCareCircleMember(id);
+      refresh();
+      if (expandedId === id) setExpandedId(null);
+      setConfirmRemoveId(null);
+    } else {
+      setConfirmRemoveId(id);
+    }
   };
 
   const togglePermission = (id: string, field: "can_view_records" | "can_manage_appointments" | "is_emergency_contact") => {
@@ -280,10 +286,20 @@ export default function CareCircle() {
                             ))}
                           </div>
 
-                          <button onClick={() => handleRemove(member.id)}
-                            className="flex items-center gap-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 px-3 py-1.5 rounded-xl transition-colors">
-                            <Trash2 className="w-3.5 h-3.5" /> Remove Member
-                          </button>
+                          {confirmRemoveId === member.id ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5">
+                              <span className="text-xs text-destructive font-medium">Remove {member.name}?</span>
+                              <button onClick={() => handleRemove(member.id)}
+                                className="text-xs font-bold text-destructive underline">Yes, Remove</button>
+                              <button onClick={() => setConfirmRemoveId(null)}
+                                className="text-xs font-medium text-muted-foreground underline">Cancel</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => handleRemove(member.id)}
+                              className="flex items-center gap-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 px-3 py-1.5 rounded-xl transition-colors">
+                              <Trash2 className="w-3.5 h-3.5" /> Remove Member
+                            </button>
+                          )}
                         </div>
                       </motion.div>
                     )}

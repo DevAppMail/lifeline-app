@@ -156,8 +156,8 @@ export function PrescriptionCard({ prescription }: { prescription: ContinuityPre
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
                 className="overflow-hidden">
                 <div className="mt-3 space-y-2">
-                  {prescription.items.map((med, i) => (
-                    <div key={i} className="bg-muted/50 rounded-xl p-3">
+                  {prescription.items.map((med) => (
+                    <div key={med.drugName} className="bg-muted/50 rounded-xl p-3">
                       <div className="flex items-start gap-2.5">
                         <Pill className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
                         <div className="flex-1 min-w-0">

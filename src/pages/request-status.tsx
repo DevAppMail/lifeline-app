@@ -102,6 +102,30 @@ export default function RequestStatus() {
     loadData();
   };
 
+  // ── Not Found Guard ─────────────────────────────────────────────
+  if (requestId && !request) {
+    return (
+      <div className="min-h-[100dvh] flex flex-col bg-background">
+        <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-border">
+          <button onClick={() => setLocation("/requests")} className="w-10 h-10 rounded-full flex items-center justify-center bg-muted hover:bg-muted/80">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <h1 className="text-xl font-bold">Request Status</h1>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-5 text-center">
+          <AlertCircle className="w-12 h-12 text-muted-foreground mb-4" />
+          <h2 className="text-lg font-semibold">Request Not Found</h2>
+          <p className="text-muted-foreground mt-1">
+            This request could not be found. It may have been removed or the link is invalid.
+          </p>
+          <Button className="mt-6" onClick={() => setLocation("/requests")}>
+            Back to Requests
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   // ── Single Request View ──────────────────────────────────────────
   if (requestId && request) {
     const cfg = STATUS_VIEW_CONFIG[request.status] ?? STATUS_VIEW_CONFIG.active;
@@ -213,7 +237,7 @@ export default function RequestStatus() {
             <h3 className="text-sm font-bold text-foreground mb-3">Status Timeline</h3>
             <div className="space-y-3">
               {request.status_history.map((entry, i) => (
-                <div key={i} className="flex items-start gap-3">
+                <div key={`${entry.from}-${entry.to}-${entry.timestamp}`} className="flex items-start gap-3">
                   <div className="flex flex-col items-center">
                     <div className={`w-3 h-3 rounded-full border-2 ${
                       i === request.status_history.length - 1

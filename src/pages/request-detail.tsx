@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, AlertTriangle, Clock, Zap, Droplet, MapPin,
   Navigation, Heart, CheckCircle2, Calendar, Bell, Home, Timer,
-  Users, X, Phone, Shield,
+  Users, X, Phone, Shield, Loader2,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import { addCommitment, getCommitment } from "@/lib/commitments";
@@ -86,6 +86,7 @@ export default function RequestDetail() {
   const [alreadyCommitted, setAlreadyCommitted] = useState(false);
   const [donorUnavailable, setDonorUnavailable] = useState(false);
   const [inCooldown, setInCooldown] = useState(false);
+  const [committing, setCommitting] = useState(false);
 
   const id = params?.id ? Number(params.id) : NaN;
   const countdown = useCountdown(request?.required_date, request?.required_time);
@@ -131,7 +132,8 @@ export default function RequestDetail() {
   }, [id, profile]);
 
   const handleConfirmCommitment = useCallback(async () => {
-    if (!request) return;
+    if (!request || committing) return;
+    setCommitting(true);
     try {
       await fetch(`/api/blood-requests/${id}`, {
         method: "PUT",
@@ -164,8 +166,9 @@ export default function RequestDetail() {
       donorId: profile?.phone ?? undefined,
     });
 
+    setCommitting(false);
     setFlowState("success");
-  }, [request, id, profile?.phone]);
+  }, [request, id, profile?.phone, committing]);
 
   if (loading) {
     return (
@@ -300,9 +303,10 @@ export default function RequestDetail() {
         <div className="flex-shrink-0 px-5 pb-8 pt-3 space-y-3 border-t border-border">
           <button
             onClick={handleConfirmCommitment}
-            className="w-full h-13 bg-primary text-white rounded-xl font-bold text-base flex items-center justify-center gap-2"
+            disabled={committing}
+            className="w-full h-13 bg-primary text-white rounded-xl font-bold text-base flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Heart className="w-5 h-5" /> I Confirm My Commitment
+            {committing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5" />} {committing ? "Confirming..." : "I Confirm My Commitment"}
           </button>
           <button
             onClick={() => setFlowState("detail")}

@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
 import { addContribution } from "@/lib/contribution-store";
+import { toast } from "sonner";
 import { AppreciationCard, AppreciationCardActions, useAppreciationCard } from "@/components/appreciation-card";
 import type { AppreciationCardData, ContributionType } from "@/types/contribution";
 
@@ -57,23 +58,28 @@ export default function VoluntaryDonation() {
 
     const cardId = `appreciation-${Date.now().toString(36)}`;
 
-    const isCamp = organizer.length > 0 || location.length > 0;
-    const type: ContributionType = isCamp ? "camp_donation" : "independent_donation";
+    try {
+      const isCamp = organizer.length > 0 || location.length > 0;
+      const type: ContributionType = isCamp ? "camp_donation" : "independent_donation";
 
-    addContribution({
-      type,
-      lifelineId: profile.lifeline_id,
-      donorName: profile.name,
-      donationDate,
-      location: location || undefined,
-      organizer: organizer || undefined,
-      donationCardUrl: cardPreview ?? undefined,
-      donationPhotoUrl: photoPreview ?? undefined,
-    });
+      addContribution({
+        type,
+        lifelineId: profile.lifeline_id,
+        donorName: profile.name,
+        donationDate,
+        location: location || undefined,
+        organizer: organizer || undefined,
+        donationCardUrl: cardPreview ?? undefined,
+        donationPhotoUrl: photoPreview ?? undefined,
+      });
 
-    setAppreciationCardId(cardId);
-    setSubmitting(false);
-    setStep("success");
+      setAppreciationCardId(cardId);
+      setSubmitting(false);
+      setStep("success");
+    } catch (err) {
+      setSubmitting(false);
+      toast.error("Failed to save donation. Please try again.");
+    }
   };
 
   const appreciationCardData: AppreciationCardData | null = appreciationCardId

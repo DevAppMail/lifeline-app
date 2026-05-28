@@ -353,3 +353,9 @@
     inset: -1px;
   }
 }
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  }
+}

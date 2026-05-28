@@ -2,24 +2,14 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion } from "framer-motion";
 import {
-  ChevronLeft, Calendar, MapPin, Heart, Droplet, Activity, User,
+  ChevronLeft, Calendar, MapPin, CheckCircle2, Clock,
 } from "lucide-react";
 import { BottomNav } from "@/components/bottom-nav";
-
-interface CommunityEvent {
-  id: string;
-  title: string;
-  description?: string;
-  event_type: string;
-  date: string;
-  location: string;
-}
-
-const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
-  blood_drive:  { label: "Blood Drive",  color: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300" },
-  health_camp:  { label: "Health Camp",  color: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" },
-  ngo_campaign: { label: "NGO Campaign", color: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300" },
-};
+import { useProfile } from "@/context/profile-context";
+import type { CommunityEvent } from "@/types/events";
+import { TYPE_CONFIG, RSVP_LABELS } from "@/types/events";
+import { getParticipations } from "@/lib/participation-store";
+import { processAttendanceMemory } from "@/lib/attendance-memory";
 
 const FILTERS = ["All", "Blood Drive", "Health Camp", "NGO Campaign"] as const;
 type Filter = typeof FILTERS[number];
@@ -32,9 +22,11 @@ const FILTER_TYPE: Record<Filter, string | null> = {
 };
 
 export default function Events() {
+  const { profile } = useProfile();
   const [events, setEvents] = useState<CommunityEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("All");
+  const [participations, setParticipations] = useState(() => getParticipations());
 
   useEffect(() => {
     fetch("/api/events")
@@ -47,9 +39,28 @@ export default function Events() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Process attendance memory on load
+  useEffect(() => {
+    if (profile?.lifeline_id && profile?.name) {
+      processAttendanceMemory(profile.lifeline_id, profile.name);
+    }
+  }, [profile?.lifeline_id, profile?.name]);
+
+  // Refresh participations periodically
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setParticipations(getParticipations());
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const filtered = filter === "All"
     ? events
     : events.filter(e => e.event_type === FILTER_TYPE[filter]);
+
+  function getEventRsvp(eventId: string) {
+    return participations.find(p => p.eventId === eventId);
+  }
 
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background pb-24">
@@ -98,15 +109,31 @@ export default function Events() {
           filtered.map((event, i) => {
             const meta = TYPE_CONFIG[event.event_type] ?? { label: event.event_type, color: "bg-muted text-muted-foreground" };
             const d = new Date(event.date);
+            const rsvp = getEventRsvp(event.id);
+            const hasRsvp = rsvp && rsvp.rsvpStatus !== "cancelled";
             return (
               <motion.div key={event.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                 <Link href={`/events/${event.id}`} className="block">
                   <div className="bg-card border border-border rounded-2xl p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <span className={`inline-flex text-[10px] font-bold px-2.5 py-0.5 rounded-full ${meta.color}`}>{meta.label}</span>
-                      <span className="text-xs text-muted-foreground flex-shrink-0">
-                        {d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {hasRsvp && (
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                            rsvp!.rsvpStatus === "attending"
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                              : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                          }`}>
+                            {rsvp!.rsvpStatus === "attending"
+                              ? <CheckCircle2 className="w-3 h-3" />
+                              : <Clock className="w-3 h-3" />}
+                            {RSVP_LABELS[rsvp!.rsvpStatus]}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground flex-shrink-0">
+                          {d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                        </span>
+                      </div>
                     </div>
                     <h3 className="text-base font-bold text-foreground leading-snug">{event.title}</h3>
                     {event.description && (

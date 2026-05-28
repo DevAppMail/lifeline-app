@@ -837,7 +837,6 @@ export default function Home() {
           <span className="text-[10px] font-medium">Profile</span>
         </Link>
       </nav>
-      <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
 
       {/* Registration Modal */}
       <AnimatePresence>

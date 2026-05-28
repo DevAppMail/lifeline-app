@@ -153,6 +153,8 @@ export default function Profile() {
   // Cancel state
   const [cancellingId, setCancellingId] = useState<number | null>(null);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [confirmRemovePhoto, setConfirmRemovePhoto] = useState(false);
 
   // Attend state
   const [attendingId, setAttendingId] = useState<number | null>(null);
@@ -204,13 +206,21 @@ export default function Profile() {
     setEName(profile.name); setEAge(String(profile.age ?? "")); setECity(profile.city); setEWork(profile.workLocation); setEditPersonal(true);
   };
   const savePersonal = () => {
-    updateProfile({ name: eName, age: Number(eAge), city: eCity, workLocation: eWork }); setEditPersonal(false);
+    try {
+      updateProfile({ name: eName, age: Number(eAge), city: eCity, workLocation: eWork });
+      toast({ title: "Profile updated" });
+    } catch { toast({ title: "Failed to save profile", variant: "destructive" }); }
+    setEditPersonal(false);
   };
   const startEditHealth = () => {
     setEBg(profile.bloodGroup); setEDonated(profile.donatedBefore); setEHealth(profile.hasHealthIssues); setEditHealth(true);
   };
   const saveHealth = () => {
-    updateProfile({ bloodGroup: eBg as BloodGroup, donatedBefore: eDonated, hasHealthIssues: eHealth }); setEditHealth(false);
+    try {
+      updateProfile({ bloodGroup: eBg as BloodGroup, donatedBefore: eDonated, hasHealthIssues: eHealth });
+      toast({ title: "Health info saved" });
+    } catch { toast({ title: "Failed to save health info", variant: "destructive" }); }
+    setEditHealth(false);
   };
 
   const handleCancel = async (id: number) => {
@@ -233,8 +243,9 @@ export default function Profile() {
     setAttendingId(id);
     try {
       const res = await fetch(`/api/appointments/${id}/attend`, { method: "PATCH" });
-      if (res.ok) await fetchAppointments();
-    } catch {}
+      if (res.ok) { await fetchAppointments(); toast({ title: "Marked as attended" }); }
+      else { toast({ title: "Could not mark attendance", variant: "destructive" }); }
+    } catch { toast({ title: "Connection error", variant: "destructive" }); }
     setAttendingId(null);
   };
 
@@ -313,11 +324,19 @@ export default function Profile() {
                   <Camera className="w-5 h-5 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               </button>
-              {profilePhoto.hasPhoto && (
-                <button onClick={profilePhoto.removePhoto}
+              {profilePhoto.hasPhoto && !confirmRemovePhoto && (
+                <button onClick={() => setConfirmRemovePhoto(true)}
                   className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center border-2 border-primary">
                   <X className="w-3 h-3 text-white" />
                 </button>
+              )}
+              {confirmRemovePhoto && (
+                <div className="absolute -top-1 -right-1 flex gap-1">
+                  <button onClick={() => { profilePhoto.removePhoto(); setConfirmRemovePhoto(false); }}
+                    className="text-[9px] font-bold bg-red-500 text-white px-1.5 py-0.5 rounded-l">Yes</button>
+                  <button onClick={() => setConfirmRemovePhoto(false)}
+                    className="text-[9px] bg-card text-foreground px-1.5 py-0.5 rounded-r border border-border">No</button>
+                </div>
               )}
             </div>
             <div className="flex-1 min-w-0">
@@ -729,7 +748,7 @@ export default function Profile() {
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </button>
           <button
-            onClick={() => { clearProfile(); setLocation("/login"); }}
+            onClick={() => setShowLogoutConfirm(true)}
             className="w-full flex items-center gap-3 px-4 py-4 hover:bg-destructive/5 transition-colors">
             <div className="w-8 h-8 rounded-xl bg-destructive/10 flex items-center justify-center">
               <LogOut className="w-4 h-4 text-destructive" />
@@ -764,14 +783,39 @@ export default function Profile() {
           <span className="text-[10px] font-semibold">Profile</span>
         </Link>
       </nav>
-      <style dangerouslySetInnerHTML={{ __html: `.pb-safe { padding-bottom: calc(0.75rem + env(safe-area-inset-bottom)); }` }} />
 
       {/* RATING MODAL */}
       <AnimatePresence>
+        {showLogoutConfirm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/50 flex items-end px-0"
+            onClick={(e: React.MouseEvent) => { if (e.target === e.currentTarget) setShowLogoutConfirm(false); }}>
+            <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              className="bg-card w-full rounded-t-3xl p-6 pb-10 space-y-5 shadow-2xl">
+              <div className="w-10 h-1 bg-muted-foreground/20 rounded-full mx-auto mb-2" />
+              <div className="text-center">
+                <LogOut className="w-10 h-10 text-destructive mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-foreground">Log Out</h3>
+                <p className="text-sm text-muted-foreground mt-1">Are you sure you want to log out? Your health data will remain on this device.</p>
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setShowLogoutConfirm(false)}
+                  className="flex-1 py-3 border border-border rounded-2xl text-sm font-semibold text-muted-foreground">
+                  Cancel
+                </button>
+                <button onClick={() => { clearProfile(); setLocation("/login"); }}
+                  className="flex-1 py-3 bg-destructive text-white rounded-2xl text-sm font-bold">
+                  Log Out
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
         {ratingAppt && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 bg-black/50 flex items-end px-0"
-            onClick={(e) => { if (e.target === e.currentTarget) setRatingAppt(null); }}>
+            onClick={(e: React.MouseEvent) => { if (e.target === e.currentTarget) setRatingAppt(null); }}>
             <motion.div initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 28, stiffness: 320 }}
               className="bg-card w-full rounded-t-3xl p-6 pb-10 space-y-5 shadow-2xl">
