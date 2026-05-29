@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useProfile, BloodGroup } from "@/context/profile-context";
 import { supabase } from "@/lib/supabase";
+import { getOAuthProfile, clearOAuthProfile } from "@/lib/oauth-profile";
 
 const BLOOD_GROUPS: BloodGroup[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -27,6 +28,15 @@ export default function Onboarding() {
   const [city, setCity] = useState("");
   const [workLocation, setWorkLocation] = useState("");
   const [showTooltip, setShowTooltip] = useState(false);
+
+  // Pre-fill name from OAuth provider (Google, etc.)
+  useEffect(() => {
+    const oauth = getOAuthProfile();
+    if (oauth?.name) {
+      setName(oauth.name);
+      clearOAuthProfile();
+    }
+  }, []);
 
   // Screen 2
   const [bloodGroup, setBloodGroup] = useState<BloodGroup | "">("");

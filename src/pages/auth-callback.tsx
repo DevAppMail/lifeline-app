@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Droplet } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 import { useProfile } from "@/context/profile-context";
+import { storeOAuthProfile, getOAuthProvider, isOAuthUser } from "@/lib/oauth-profile";
 import type { Session } from "@supabase/supabase-js";
 
 export default function AuthCallback() {
@@ -18,48 +19,61 @@ export default function AuthCallback() {
       if (handled) return;
       handled = true;
 
+      const user = session.user;
+      const provider = getOAuthProvider(user);
+
       setStatus("Loading your profile…");
 
       try {
-        const res = await fetch(
-          `/api/users/lookup?email=${encodeURIComponent(session.user.email!)}`
-        );
+        if (user.email) {
+          const res = await fetch(
+            `/api/users/lookup?email=${encodeURIComponent(user.email)}`
+          );
 
-        if (res.ok) {
-          const data = await res.json() as {
-            user: { name?: string; blood_group?: string; location?: string };
-            donor: { lifeline_donations: number; pre_lifeline_donations: number; last_donation_date: string | null } | null;
-          };
-          updateProfile({
-            ...(data.user?.blood_group ? { bloodGroup: data.user.blood_group as any } : {}),
-            ...(data.user?.location ? { city: data.user.location } : {}),
-            ...(data.donor ? {
-              donationCount: data.donor.lifeline_donations,
-              preLifelineDonations: data.donor.pre_lifeline_donations,
-              lastDonationDate: data.donor.last_donation_date ?? undefined,
-            } : {}),
-          });
-          // Returning user with a name → home; otherwise complete onboarding
-          setLocation(profile?.name || data.user?.name ? "/home" : "/onboarding");
+          if (res.ok) {
+            // Existing user — load their profile
+            const data = await res.json() as {
+              user: { name?: string; blood_group?: string; location?: string };
+              donor: { lifeline_donations: number; pre_lifeline_donations: number; last_donation_date: string | null } | null;
+            };
+            updateProfile({
+              ...(data.user?.blood_group ? { bloodGroup: data.user.blood_group as any } : {}),
+              ...(data.user?.location ? { city: data.user.location } : {}),
+              ...(data.donor ? {
+                donationCount: data.donor.lifeline_donations,
+                preLifelineDonations: data.donor.pre_lifeline_donations,
+                lastDonationDate: data.donor.last_donation_date ?? undefined,
+              } : {}),
+            });
+
+            // Returning user: go home if profile exists, else onboarding
+            const target = profile?.name || data.user?.name ? "/home" : "/onboarding";
+            setLocation(target);
+          } else {
+            // 404 — new user
+            // For OAuth users, store their profile data so onboarding can pre-fill
+            if (provider && isOAuthUser(user)) {
+              storeOAuthProfile(user, provider);
+            }
+            setLocation("/onboarding");
+          }
         } else {
-          // 404 — new signup, no backend record yet
-          setLocation("/onboarding");
+          // No email on session (rare fallback)
+          setLocation(profile?.name ? "/home" : "/onboarding");
         }
       } catch {
         setLocation(profile?.name ? "/home" : "/onboarding");
       }
     }
 
-    // Primary: listen for the SIGNED_IN event that fires when Supabase
-    // exchanges the URL hash tokens on page load.
+    // Primary: listen for SIGNED_IN event
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === "SIGNED_IN" && session) handleSession(session);
       }
     );
 
-    // Fallback: the listener above may miss the event if it fires before
-    // this effect runs. Check the current session immediately.
+    // Fallback: check current session immediately (listener may miss initial event)
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) handleSession(session);
     });
