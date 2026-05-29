@@ -1,10 +1,20 @@
-import { type ReactNode, Component, type ErrorInfo } from "react";
+import { type ReactNode, Component, type ErrorInfo, useEffect } from "react";
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProfileProvider, useProfile } from "@/context/profile-context";
+import { BreadcrumbBar } from "@/components/breadcrumb-bar";
 import NotFound from "@/pages/not-found";
+
+// ── Scroll to top on every route change ──────────────────────────────────────────
+function ScrollToTop() {
+  const [location] = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [location]);
+  return null;
+}
 
 // ── Global error boundary ──────────────────────────────────────────────────────
 class AppErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
@@ -122,6 +132,8 @@ function App() {
               <div className="w-full max-w-[430px] bg-background shadow-2xl relative overflow-x-hidden min-h-[100dvh]">
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                   <AuthGuard>
+                    <ScrollToTop />
+                    <BreadcrumbBar />
                     <Router />
                   </AuthGuard>
                 </WouterRouter>
