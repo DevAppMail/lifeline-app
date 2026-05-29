@@ -231,7 +231,7 @@ export default function FollowUps() {
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground block mb-1">Provider / Doctor *</label>
                   <input list="providers-list" value={rProvider} onChange={e => setRProvider(e.target.value)}
-                    placeholder="e.g. Dr. Priya Sharma"
+                    placeholder="e.g. Dr. Tanvi Naik"
                     className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30" />
                   <datalist id="providers-list">
                     {providers.map(p => <option key={p} value={p} />)}

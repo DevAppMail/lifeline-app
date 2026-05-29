@@ -1021,7 +1021,7 @@ export default function RequestBlood() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Patient Full Name</Label>
-                  <Input placeholder="e.g. Mohammad Karim" className="h-12 rounded-xl" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
+                  <Input placeholder="e.g. Rohit Naik" className="h-12 rounded-xl" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Relationship to Patient</Label>
@@ -1058,11 +1058,11 @@ export default function RequestBlood() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Hospital Name</Label>
-                  <Input placeholder="e.g. Dhaka Medical College" className="h-12 rounded-xl" value={hospital} onChange={(e) => setHospital(e.target.value)} />
+                  <Input placeholder="e.g. Goa Medical College, Bambolim" className="h-12 rounded-xl" value={hospital} onChange={(e) => setHospital(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Hospital City</Label>
-                  <Input placeholder="e.g. Dhaka" className="h-12 rounded-xl" value={hospitalCity} onChange={(e) => setHospitalCity(e.target.value)} />
+                  <Input placeholder="e.g. Margao" className="h-12 rounded-xl" value={hospitalCity} onChange={(e) => setHospitalCity(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">

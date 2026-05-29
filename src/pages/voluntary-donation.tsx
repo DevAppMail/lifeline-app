@@ -165,7 +165,7 @@ export default function VoluntaryDonation() {
                       type="text"
                       value={location}
                       onChange={(e) => setLocationState(e.target.value)}
-                      placeholder="e.g., Red Cross Camp, Mumbai"
+                      placeholder="e.g., Goa Medical College, Bambolim"
                       className="flex-1 bg-transparent text-foreground text-sm outline-none placeholder:text-muted-foreground/50"
                     />
                   </div>
