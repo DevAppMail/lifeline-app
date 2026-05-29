@@ -34,6 +34,9 @@ export interface UserProfile {
   chronic_conditions?: string[];
   preferred_language?: string;
   profile_photo_url?: string;
+  profile_photo_source?: "camera" | "gallery" | "google_profile" | "future_import";
+  profile_photo_uploaded_at?: string;
+  profile_photo_updated_at?: string;
   emergency_contacts?: EmergencyContact[];
 }
 
