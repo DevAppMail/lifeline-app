@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, Heart, Droplet, Calendar, MapPin,
@@ -28,6 +29,9 @@ export default function VoluntaryDonation() {
   const [donationPhotoFile, setDonationPhotoFile] = useState<File | null>(null);
   const [cardPreview, setCardPreview] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoStorageUrl, setPhotoStorageUrl] = useState<string | null>(null);
+
+  const { uploadPhoto } = usePhotoUpload();
 
   const [appreciationCardId, setAppreciationCardId] = useState<string | null>(null);
 
@@ -43,13 +47,18 @@ export default function VoluntaryDonation() {
     reader.readAsDataURL(file);
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setDonationPhotoFile(file);
     const reader = new FileReader();
     reader.onload = () => setPhotoPreview(reader.result as string);
     reader.readAsDataURL(file);
+    const { publicUrl } = await uploadPhoto(file, 'donation-photos',
+      `donation_${Date.now()}.webp`,
+      { maxWidth: 800, quality: 0.7, format: 'image/webp' }
+    );
+    if (publicUrl) setPhotoStorageUrl(publicUrl);
   };
 
   const handleSubmit = async () => {
@@ -70,7 +79,7 @@ export default function VoluntaryDonation() {
         location: location || undefined,
         organizer: organizer || undefined,
         donationCardUrl: cardPreview ?? undefined,
-        donationPhotoUrl: photoPreview ?? undefined,
+        donationPhotoUrl: photoStorageUrl ?? photoPreview ?? undefined,
       });
 
       setAppreciationCardId(cardId);
@@ -156,7 +165,7 @@ export default function VoluntaryDonation() {
                       type="text"
                       value={location}
                       onChange={(e) => setLocationState(e.target.value)}
-                      placeholder="e.g., Red Cross Camp, Mumbai"
+                      placeholder="e.g., Goa Medical College, Bambolim"
                       className="flex-1 bg-transparent text-foreground text-sm outline-none placeholder:text-muted-foreground/50"
                     />
                   </div>

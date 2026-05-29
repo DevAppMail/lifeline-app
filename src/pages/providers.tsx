@@ -137,7 +137,7 @@ export default function Providers() {
 
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground block mb-1">Name *</label>
-                  <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Dr. Priya Sharma"
+                  <input value={fName} onChange={e => setFName(e.target.value)} placeholder="Dr. Tanvi Naik"
                     className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/30" />
                 </div>
 

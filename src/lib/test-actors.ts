@@ -38,11 +38,11 @@ export function setupDonorActor(): void {
   persistActor(
     true,
     {
-      name: "Test Donor Rahul",
+      name: "Rohit Naik",
       phone: "+919876543210",
       age: 28,
       gender: "male",
-      city: "Mumbai",
+      city: "Ponda",
       bloodGroup: "O+",
       donationCount: 3,
       preLifelineDonations: 5,
@@ -82,11 +82,11 @@ export function setupCooldownDonorActor(): void {
   persistActor(
     true,
     {
-      name: "Test Donor Priya",
+      name: "Tanvi Naik",
       phone: "+919876543211",
       age: 32,
       gender: "female",
-      city: "Delhi",
+      city: "Margao",
       bloodGroup: "A+",
       donationCount: 1,
       preLifelineDonations: 2,
@@ -126,11 +126,11 @@ export function setupRequesterActor(): void {
   persistActor(
     true,
     {
-      name: "Test Requester Anita",
+      name: "Kavita Dessai",
       phone: "+919876543212",
       age: 35,
       gender: "female",
-      city: "Mumbai",
+      city: "Vasco",
       bloodGroup: "B+",
       donationCount: 0,
       preLifelineDonations: 0,
@@ -165,11 +165,11 @@ export function setupFreshDonorActor(): void {
   persistActor(
     true,
     {
-      name: "Test Donor New",
+      name: "Rohan Sardessai",
       phone: "+919876543213",
       age: 22,
       gender: "male",
-      city: "Bangalore",
+      city: "Panjim",
       bloodGroup: "AB+",
       donationCount: 0,
       preLifelineDonations: 0,

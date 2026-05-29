@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useProfile } from "@/context/profile-context";
+import { usePhotoUpload } from "@/hooks/usePhotoUpload";
 import { createRequest } from "@/lib/request-store";
 
 type Tier = "scheduled" | "urgent" | "emergency" | null;
@@ -839,6 +840,9 @@ export default function RequestBlood() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [selfieData, setSelfieData] = useState<SelfieData | null>(null);
   const [selfieSkipped, setSelfieSkipped] = useState(false);
+  const [selfieStorageUrl, setSelfieStorageUrl] = useState<string | null>(null);
+
+  const { migrateDataUrl } = usePhotoUpload();
 
   const [paying, setPaying] = useState(false);
   const [requestId] = useState(genRequestId);
@@ -881,6 +885,7 @@ export default function RequestBlood() {
           consent_accepted_at: consentTimestamp,
           consent_version: CONSENT_VERSION,
           verification_selfie_data: selfieData?.dataUrl ?? null,
+          verification_selfie_url: selfieStorageUrl ?? null,
           verification_lat: selfieData?.lat ?? null,
           verification_lng: selfieData?.lng ?? null,
           verification_timestamp: selfieData?.timestamp ?? null,
@@ -1016,7 +1021,7 @@ export default function RequestBlood() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Patient Full Name</Label>
-                  <Input placeholder="e.g. Mohammad Karim" className="h-12 rounded-xl" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
+                  <Input placeholder="e.g. Rohit Naik" className="h-12 rounded-xl" value={patientName} onChange={(e) => setPatientName(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Relationship to Patient</Label>
@@ -1053,11 +1058,11 @@ export default function RequestBlood() {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Hospital Name</Label>
-                  <Input placeholder="e.g. Dhaka Medical College" className="h-12 rounded-xl" value={hospital} onChange={(e) => setHospital(e.target.value)} />
+                  <Input placeholder="e.g. Goa Medical College, Bambolim" className="h-12 rounded-xl" value={hospital} onChange={(e) => setHospital(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Hospital City</Label>
-                  <Input placeholder="e.g. Dhaka" className="h-12 rounded-xl" value={hospitalCity} onChange={(e) => setHospitalCity(e.target.value)} />
+                  <Input placeholder="e.g. Margao" className="h-12 rounded-xl" value={hospitalCity} onChange={(e) => setHospitalCity(e.target.value)} />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
@@ -1130,7 +1135,14 @@ export default function RequestBlood() {
                 <SelfieCapture
                   requesterName={profile?.name ?? ""}
                   tier={tier}
-                  onCapture={(data) => setSelfieData(data)}
+                  onCapture={async (data) => {
+                    setSelfieData(data);
+                    const { publicUrl } = await migrateDataUrl(data.dataUrl, 'verification-selfies', 
+                      `selfie_${requestId}.webp`,
+                      { maxWidth: 800, quality: 0.7, format: 'image/webp' }
+                    ).catch(() => ({} as any));
+                    if (publicUrl) setSelfieStorageUrl(publicUrl);
+                  }}
                   onSkip={() => setSelfieSkipped(true)}
                 />
               )}

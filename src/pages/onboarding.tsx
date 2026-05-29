@@ -137,7 +137,7 @@ export default function Onboarding() {
               <div className="space-y-5 flex-1">
                 <div className="space-y-1.5">
                   <Label htmlFor="name" className="text-sm font-semibold">Full Name</Label>
-                  <Input id="name" placeholder="e.g. Priya Sharma" className="h-12 rounded-xl" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+                  <Input id="name" placeholder="e.g. Rohit Naik" className="h-12 rounded-xl" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-semibold">Gender</Label>
@@ -170,11 +170,11 @@ export default function Onboarding() {
                       )}
                     </div>
                   </div>
-                  <Input id="city" placeholder="e.g. Mumbai, Pune, Delhi, Bengaluru" className="h-12 rounded-xl" value={city} onChange={(e) => setCity(e.target.value)} />
+                  <Input id="city" placeholder="e.g. Ponda, Margao, Panjim, Mapusa" className="h-12 rounded-xl" value={city} onChange={(e) => setCity(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="work" className="text-sm font-semibold">Where you work <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                  <Input id="work" placeholder="e.g. Andheri, Bandra, Connaught Place" className="h-12 rounded-xl" value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} />
+                  <Input id="work" placeholder="e.g. Panjim, Margao, Vasco" className="h-12 rounded-xl" value={workLocation} onChange={(e) => setWorkLocation(e.target.value)} />
                 </div>
               </div>
               <div className="pt-6">
