@@ -13,6 +13,7 @@ import {
 } from "@/lib/health-store";
 import type { TimelineEntry, TimelineEntryType, EntryStatus } from "@/types/health";
 import { BottomNav } from "@/components/bottom-nav";
+import { getContributionById } from "@/lib/contribution-store";
 
 const TYPE_CONFIG: Record<TimelineEntryType, { label: string; icon: React.ReactNode; color: string; bg: string }> = {
   donation:    { label: "Blood Donation",  icon: <Droplet className="w-4 h-4" />,       color: "text-primary",              bg: "bg-primary/10" },
@@ -285,6 +286,11 @@ export default function HealthTimeline() {
                                 <span className={`text-[10px] font-bold uppercase tracking-wider ${cfg.color}`}>
                                   {cfg.label}
                                 </span>
+                                {entry.type === "donation" && getContributionById(entry.id)?.donationCardUrl && (
+                                  <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5">
+                                    <Check className="w-3 h-3" /> Verified
+                                  </span>
+                                )}
                                 {entry.status && (
                                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
                                     entry.status === "completed" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"

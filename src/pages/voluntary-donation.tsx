@@ -7,7 +7,7 @@ import {
   Upload, Camera, CheckCircle2, Loader2,
 } from "lucide-react";
 import { useProfile } from "@/context/profile-context";
-import { addContribution } from "@/lib/contribution-store";
+import { addContribution, updateDonorLastDonationDate } from "@/lib/contribution-store";
 import { toast } from "sonner";
 import { AppreciationCard, AppreciationCardActions, useAppreciationCard } from "@/components/appreciation-card";
 import type { AppreciationCardData, ContributionType } from "@/types/contribution";
@@ -16,7 +16,7 @@ type FlowStep = "form" | "success";
 
 export default function VoluntaryDonation() {
   const [, setLocation] = useLocation();
-  const { profile } = useProfile();
+  const { profile, updateProfile } = useProfile();
   const { saveCard, shareCard, whatsAppShare } = useAppreciationCard();
 
   const [step, setStep] = useState<FlowStep>("form");
@@ -82,6 +82,11 @@ export default function VoluntaryDonation() {
         donationPhotoUrl: photoStorageUrl ?? photoPreview ?? undefined,
       });
 
+      const updated = updateDonorLastDonationDate(profile.lifeline_id, donationDate);
+      if (updated) {
+        updateProfile({ lastDonationDate: donationDate });
+      }
+
       setAppreciationCardId(cardId);
       setSubmitting(false);
       setStep("success");
@@ -105,7 +110,7 @@ export default function VoluntaryDonation() {
     <div className="min-h-[100dvh] flex flex-col bg-background">
       {/* Header */}
       <div className="flex items-center gap-3 px-5 pt-12 pb-4 border-b border-border">
-        <button onClick={() => setLocation("/home")} className="w-10 h-10 rounded-full flex items-center justify-center bg-muted hover:bg-muted/80">
+        <button onClick={() => setLocation("/donate")} className="w-10 h-10 rounded-full flex items-center justify-center bg-muted hover:bg-muted/80">
           <ChevronLeft className="w-5 h-5" />
         </button>
         <div>
@@ -191,7 +196,7 @@ export default function VoluntaryDonation() {
                 {/* Donation Card Upload */}
                 <div>
                   <label className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 block">
-                    Donation Card / Slip (optional)
+                    Donation Card / Slip (required)
                   </label>
                   <input
                     ref={cardInputRef}
@@ -260,7 +265,7 @@ export default function VoluntaryDonation() {
               {/* Submit */}
               <button
                 onClick={handleSubmit}
-                disabled={submitting || !donationDate}
+                disabled={submitting || !donationDate || !donationCardFile}
                 className="w-full h-12 rounded-xl bg-primary text-white font-bold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {submitting ? (

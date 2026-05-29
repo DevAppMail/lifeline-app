@@ -145,3 +145,23 @@ export function getTotalContributionsByType(): Record<ContributionType, number> 
 export function clearAllContributions(): void {
   localStorage.removeItem(STORAGE_KEY);
 }
+
+export function updateDonorLastDonationDate(lifelineId: string, donationDate: string): boolean {
+  try {
+    const profile = JSON.parse(localStorage.getItem("lifeline_profile") ?? "{}");
+    const current = profile.lastDonationDate ?? "";
+    if (current && new Date(donationDate) <= new Date(current)) {
+      return false;
+    }
+    profile.lastDonationDate = donationDate;
+    localStorage.setItem("lifeline_profile", JSON.stringify(profile));
+    fetch("/api/donors/update-last-donation", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lifeline_id: lifelineId, last_donation_date: donationDate }),
+    }).catch(() => {});
+    return true;
+  } catch {
+    return false;
+  }
+}

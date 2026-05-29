@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation, Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,6 +17,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "@/hooks/use-toast";
 import { useContinuity } from "@/hooks/useContinuity";
 import { ContinuitySummary } from "@/components/continuity";
+import { getRequestsByRequester } from "@/lib/request-store";
 
 const BLOOD_GROUPS: BloodGroup[] = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -195,12 +196,19 @@ export default function Profile() {
 
   const firstName = profile.name.split(" ")[0];
   const memberSince = "May 2025";
-  const totalDonations = 3;
-  const livesImpacted = totalDonations * 3;
-  const donorScore = 7;
-  const streak = 2;
 
   const noShowCount = appointments.filter(a => a.status === "no_show").length;
+
+  const requesterRequests = useMemo(() =>
+    profile?.phone ? getRequestsByRequester(profile.phone) : [],
+    [profile?.phone],
+  );
+  const fulfilledCount = requesterRequests.filter(r => r.status === "fulfilled").length;
+  const totalUnits = (profile.donationCount ?? 0) + (profile.preLifelineDonations ?? 0);
+  const streakMonths = profile.streakMonths ?? 0;
+  const streakLabel = streakMonths > 0
+    ? streakMonths === 1 ? "1st" : streakMonths === 2 ? "2nd" : streakMonths === 3 ? "3rd" : `${streakMonths}th`
+    : "—";
 
   const startEditPersonal = () => {
     setEName(profile.name); setEAge(String(profile.age ?? "")); setECity(profile.city); setEWork(profile.workLocation); setEditPersonal(true);
@@ -495,22 +503,49 @@ export default function Profile() {
           )}
         </Section>
 
-        {/* MY STATS */}
-        <Section title="My Stats">
-          <div className="grid grid-cols-2 divide-x divide-y divide-border">
-            {[
-              { icon: <Heart className="w-5 h-5 text-primary" />, value: totalDonations, label: "Donations", color: "text-primary" },
-              { icon: <Users className="w-5 h-5 text-emerald-600" />, value: livesImpacted, label: "Lives Impacted", color: "text-emerald-600" },
-              { icon: <Trophy className="w-5 h-5 text-amber-500" />, value: donorScore, label: "Donor Score", color: "text-amber-500" },
-              { icon: <Flame className="w-5 h-5 text-orange-500" />, value: `${streak}×`, label: "Current Streak", color: "text-orange-500" },
-            ].map((stat) => (
-              <div key={stat.label} className="flex flex-col items-center justify-center p-5 gap-1">
-                {stat.icon}
-                <span className={`text-2xl font-bold ${stat.color}`}>{stat.value}</span>
-                <span className="text-xs text-muted-foreground text-center">{stat.label}</span>
+        {/* YOUR IMPACT */}
+        <Section title="Your Impact">
+          {totalUnits === 0 && fulfilledCount === 0 ? (
+            <div className="flex flex-col items-center text-center p-6 gap-3">
+              <Heart className="w-8 h-8 text-muted-foreground/40" />
+              <p className="font-semibold text-sm text-foreground">No donations recorded yet</p>
+              <p className="text-xs text-muted-foreground max-w-[240px] leading-relaxed">
+                When you donate, your impact appears here.
+              </p>
+              <button onClick={() => setLocation("/home")}
+                className="px-5 py-2.5 bg-primary text-white text-xs font-bold rounded-xl">
+                Find a Donation Drive
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 space-y-3">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="flex flex-col items-center bg-muted/50 rounded-xl py-4 px-2 gap-1">
+                  <Droplet className="w-5 h-5 text-primary" />
+                  <span className="text-xl font-bold text-foreground">{totalUnits}</span>
+                  <span className="text-[10px] text-muted-foreground text-center leading-tight">Total Units</span>
+                </div>
+                <div className="flex flex-col items-center bg-muted/50 rounded-xl py-4 px-2 gap-1">
+                  <Flame className="w-5 h-5 text-orange-500" />
+                  <span className="text-xl font-bold text-foreground">{streakLabel}</span>
+                  <span className="text-[10px] text-muted-foreground text-center leading-tight">Month Streak</span>
+                </div>
+                <div className="flex flex-col items-center bg-muted/50 rounded-xl py-4 px-2 gap-1">
+                  <Activity className="w-5 h-5 text-emerald-600" />
+                  <span className="text-xl font-bold text-foreground">{fulfilledCount}</span>
+                  <span className="text-[10px] text-muted-foreground text-center leading-tight">Requests Fulfilled</span>
+                </div>
               </div>
-            ))}
-          </div>
+              {(profile.preLifelineDonations ?? 0) > 0 && (
+                <p className="text-xs text-muted-foreground text-center">
+                  {profile.preLifelineDonations} donation{profile.preLifelineDonations !== 1 ? "s" : ""} before LifeLine
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground italic text-center leading-relaxed">
+                Donation figures based on confirmed hospital reports. LifeLine is a coordination platform.
+              </p>
+            </div>
+          )}
         </Section>
 
         {/* HEALTH CONTINUITY */}

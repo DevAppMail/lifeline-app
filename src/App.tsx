@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ProfileProvider, useProfile } from "@/context/profile-context";
-import { BreadcrumbBar } from "@/components/breadcrumb-bar";
 import NotFound from "@/pages/not-found";
 
 // ── Scroll to top on every route change ──────────────────────────────────────────
@@ -133,7 +132,6 @@ function App() {
                 <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                   <AuthGuard>
                     <ScrollToTop />
-                    <BreadcrumbBar />
                     <Router />
                   </AuthGuard>
                 </WouterRouter>
